@@ -8,6 +8,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.ide.CopyPasteManager
@@ -18,6 +19,7 @@ import ua.at.tsvetkov.logext.models.TagInfo
 import ua.at.tsvetkov.logext.services.LogCatListenerService
 import ua.at.tsvetkov.logext.services.LogCatSettingsService
 import java.awt.BorderLayout
+import java.awt.Color
 import java.awt.datatransfer.StringSelection
 import javax.swing.JPanel
 import javax.swing.Timer
@@ -27,11 +29,20 @@ import javax.swing.Timer
  */
 class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
 
-    private val consoleView: ConsoleView = ConsoleViewImpl(project, true)
+    private val consoleView: ConsoleView = object : ConsoleViewImpl(project, true) {
+        override fun createCompositeFilter(): com.intellij.execution.filters.CompositeFilter {
+            val compositeFilter = com.intellij.execution.filters.CompositeFilter(project)
+            // Добавляем наш фильтр для создания ссылок на исходный код
+            compositeFilter.addFilter(LogSourceLinkFilter(project))
+            return compositeFilter
+        }
+    }.apply {
+        (this as ConsoleViewImpl).clearMessageFilters()
+    }
+
     private val allTags = mutableMapOf<String, TagInfo>()
     private val settings = LogCatSettingsService.getInstance(project)
     private val rawLogsHistory = mutableListOf<String>()
-    private val MAX_HISTORY_SIZE = 50000
     private val pidToProcess = mutableMapOf<String, String>()
 
     private val listenerService = project.service<LogCatListenerService>()
@@ -43,7 +54,8 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             onDeviceChanged = { device ->
                 restartListening(device)
             },
-            onProcessChanged = { _ ->
+            onProcessChanged = { process ->
+                settings.getState().lastSelectedProcess = process
                 reFilterHistory()
             },
             onLevelsChanged = {
@@ -60,6 +72,13 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         Timer(5000) {
             val devices = listenerService.getConnectedDevices()
             header.updateDevices(devices)
+            
+            if (header.getSelectedProcess() == "All Processes" || header.getSelectedProcess() == null) {
+                val savedProcess = settings.getState().lastSelectedProcess
+                if (savedProcess != null && pidToProcess.values.contains(savedProcess)) {
+                    header.updateProcesses(pidToProcess.values.distinct().sorted(), savedProcess)
+                }
+            }
         }.start()
 
         restartListening(null)
@@ -94,14 +113,30 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val levelChar = matchResult?.groupValues?.get(3)
         val tagName = matchResult?.groupValues?.get(4)?.trim()
 
+        val isProcessInfoLine = line.contains("perfColdLaunchBoost")
         val processMatch = Regex("perfColdLaunchBoost: (.*?), (\\d+)").find(line)
         processMatch?.let {
             val pkg = it.groupValues[1].trim()
             val detectedPid = it.groupValues[2].trim()
-            if (pidToProcess[detectedPid] != pkg) {
+            
+            if (settings.getState().clearLogOnStart && pkg == settings.getState().lastSelectedProcess) {
+                if (pidToProcess[detectedPid] != pkg) {
+                    ApplicationManager.getApplication().invokeLater {
+                        synchronized(rawLogsHistory) {
+                            rawLogsHistory.clear()
+                            allTags.clear()
+                            pidToProcess.clear()
+                            consoleView.clear()
+                        }
+                        pidToProcess[detectedPid] = pkg
+                        header.updateProcesses(pidToProcess.values.distinct().sorted(), pkg)
+                    }
+                }
+            } else if (pidToProcess[detectedPid] != pkg) {
                 pidToProcess[detectedPid] = pkg
                 ApplicationManager.getApplication().invokeLater {
-                    header.updateProcesses(pidToProcess.values.distinct().sorted(), pkg)
+                    val preferred = settings.getState().lastSelectedProcess ?: pkg
+                    header.updateProcesses(pidToProcess.values.distinct().sorted(), preferred)
                 }
             }
         }
@@ -109,7 +144,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val selectedProcess = header.getSelectedProcess()
         if (selectedProcess != null && selectedProcess != "All Processes") {
             val targetPid = pidToProcess.entries.find { it.value == selectedProcess }?.key
-            if (pid == null || pid != targetPid) return
+            if (!isProcessInfoLine) {
+                if (pid == null || pid != targetPid) return
+            }
         }
 
         synchronized(rawLogsHistory) {
@@ -125,7 +162,11 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     processParsedMessage(line, tagName, levelChar)
                 }
             } else {
-                consoleView.print(line + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
+                // Строки без тега (системные) показываем только если фильтр тегов не ограничивает вывод
+                val selectedTags = settings.getState().selectedTags
+                if (selectedTags == null) {
+                    consoleView.print(line + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
+                }
             }
         }
     }
@@ -137,9 +178,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         tagInfo.isPresentInCurrentLog = true
 
         val selectedTags = settings.getState().selectedTags
-        if (selectedTags.isEmpty() || tagInfo.isSelected) {
-            val coloredMessage = formatParsedMessage(line, levelChar)
-            printToConsole(coloredMessage)
+        // Если selectedTags == null, значит выбраны ВСЕ теги (по умолчанию)
+        if (selectedTags == null || selectedTags.contains(tagName)) {
+            printToConsole(line, levelChar)
         }
     }
 
@@ -156,18 +197,14 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         return line.replaceFirst(" $levelChar ", " $fullLevel ")
     }
 
-    private fun printToConsole(formattedMessage: String) {
-        val contentType = when {
-            formattedMessage.contains("[ERROR]") || formattedMessage.contains("[ASSERT]") ->
-                ConsoleViewContentType.ERROR_OUTPUT
-            formattedMessage.contains("[WARN]") ->
-                ConsoleViewContentType.LOG_WARNING_OUTPUT
-            formattedMessage.contains("[INFO]") ->
-                ConsoleViewContentType.LOG_INFO_OUTPUT
-            formattedMessage.contains("[DEBUG]") || formattedMessage.contains("[VERBOSE]") ->
-                ConsoleViewContentType.LOG_DEBUG_OUTPUT
-            else -> ConsoleViewContentType.NORMAL_OUTPUT
+    private fun printToConsole(formattedMessage: String, levelChar: String) {
+        val attrs = settings.getLevelAttributes(levelChar)
+        val textAttributes = TextAttributes().apply {
+            attrs.foregroundColor?.let { foregroundColor = Color.decode(it) }
+            attrs.backgroundColor?.let { backgroundColor = Color.decode(it) }
         }
+        
+        val contentType = ConsoleViewContentType("LogCat_$levelChar", textAttributes)
         consoleView.print(formattedMessage + "\n", contentType)
     }
 
@@ -181,14 +218,53 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 val matchResult = threadtimeRegex.find(message)
                 if (matchResult != null) {
                     val levelChar = matchResult.groupValues[3]
+                    val pid = matchResult.groupValues[1]
+                    
+                    val selectedProcess = header.getSelectedProcess()
+                    val targetPid = if (selectedProcess != null && selectedProcess != "All Processes") {
+                        pidToProcess.entries.find { it.value == selectedProcess }?.key
+                    } else null
+
+                    if (targetPid != null && pid != targetPid) return@forEach
+                    
                     if (header.isLevelSelected(levelChar)) {
                         processParsedMessage(message, matchResult.groupValues[4].trim(), levelChar)
                     }
                 } else {
-                    consoleView.print(message + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
+                    val selectedProcess = header.getSelectedProcess()
+                    if (selectedProcess == null || selectedProcess == "All Processes") {
+                        val selectedTags = settings.getState().selectedTags
+                        if (selectedTags == null) {
+                            consoleView.print(message + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private fun getFilteredTagsForCurrentProcess(): List<TagInfo> {
+        val header = filterHeader ?: return allTags.values.toList()
+        val selectedProcess = header.getSelectedProcess()
+
+        if (selectedProcess != null && selectedProcess != "All Processes") {
+            val targetPid = pidToProcess.entries.find { it.value == selectedProcess }?.key
+            if (targetPid != null) {
+                val processTags = mutableSetOf<String>()
+                val historyCopy = synchronized(rawLogsHistory) { rawLogsHistory.toList() }
+
+                historyCopy.forEach { message ->
+                    val threadtimeRegex = Regex("""\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
+                    val matchResult = threadtimeRegex.find(message)
+                    if (matchResult != null && matchResult.groupValues[1] == targetPid) {
+                        processTags.add(matchResult.groupValues[4].trim())
+                    }
+                }
+
+                return allTags.values.filter { it.name in processTags || settings.isTagSelected(it.name) }
+            }
+        }
+        return allTags.values.toList()
     }
 
     private fun createToolbar() {
@@ -196,11 +272,11 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
         actionGroup.add(object : AnAction("Filter Tags", "Filter by tags", AllIcons.General.Filter) {
             override fun actionPerformed(e: AnActionEvent) {
-                val dialog = TagFilterDialog(project, allTags.values.toList())
+                val tagsToShow = getFilteredTagsForCurrentProcess()
+                val dialog = TagFilterDialog(project, tagsToShow)
                 if (dialog.showAndGet()) {
-                    allTags.values.forEach { tag ->
-                        settings.setTagSelected(tag.name, tag.isSelected)
-                    }
+                    val newSelectedTags = tagsToShow.filter { it.isSelected }.map { it.name }.toSet()
+                    settings.setSelectedTags(newSelectedTags)
                     reFilterHistory()
                 }
             }
@@ -223,6 +299,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
         actionGroup.add(object : AnAction("Settings", "Display settings", AllIcons.General.Settings) {
             override fun actionPerformed(e: AnActionEvent) {
+                if (LogSettingsDialog(project).showAndGet()) {
+                    reFilterHistory()
+                }
             }
         })
 
@@ -242,5 +321,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     override fun dispose() {
+    }
+
+    companion object {
+        private const val MAX_HISTORY_SIZE = 50000
     }
 }

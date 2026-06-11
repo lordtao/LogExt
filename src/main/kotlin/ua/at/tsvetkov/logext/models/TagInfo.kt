@@ -5,6 +5,6 @@ package ua.at.tsvetkov.logext.models
  */
 data class TagInfo(
     val name: String,
-    var isSelected: Boolean = false,
+    var isSelected: Boolean = true,
     var isPresentInCurrentLog: Boolean = true
 )
