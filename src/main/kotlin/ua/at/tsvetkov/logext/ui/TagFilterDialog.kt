@@ -1,8 +1,6 @@
 package ua.at.tsvetkov.logext.ui
 
 import com.intellij.icons.AllIcons
-import com.intellij.openapi.actionSystem.*
-import com.intellij.openapi.actionSystem.impl.ActionButton
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.DocumentAdapter
@@ -34,21 +32,11 @@ class TagFilterDialog(
     private val searchField = SearchTextField(true)
     
     private var isMatchCaseActive = false
-    private val matchCaseAction = object : ToggleAction("Match Case", "Match case", AllIcons.Actions.MatchCase) {
-        override fun isSelected(e: AnActionEvent): Boolean = isMatchCaseActive
-        override fun setSelected(e: AnActionEvent, state: Boolean) {
-            isMatchCaseActive = state
-            applyFilter()
-        }
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+    private val matchCaseBtn = JToggleButton(AllIcons.Actions.MatchCase).apply {
+        toolTipText = "Match Case"
+        preferredSize = Dimension(28, 24)
+        isFocusable = false
     }
-
-    private val matchCaseBtn = ActionButton(
-        matchCaseAction,
-        matchCaseAction.templatePresentation.clone(),
-        ActionPlaces.UNKNOWN,
-        ActionToolbar.DEFAULT_MINIMUM_BUTTON_SIZE
-    )
     
     private val tagComponents = mutableMapOf<String, JComponent>()
 
@@ -73,7 +61,7 @@ class TagFilterDialog(
     }
 
     override fun createCenterPanel(): JComponent {
-        centerPanel.preferredSize = Dimension(1200, 600)
+        centerPanel.preferredSize = Dimension(1300, 600)
         return centerPanel
     }
 
@@ -83,6 +71,10 @@ class TagFilterDialog(
                 applyFilter()
             }
         })
+        matchCaseBtn.addActionListener {
+            isMatchCaseActive = matchCaseBtn.isSelected
+            applyFilter()
+        }
     }
 
     private fun applyFilter() {
@@ -141,7 +133,8 @@ class TagFilterDialog(
 
         groupTags.forEach { tag ->
             val row = JPanel(BorderLayout())
-            row.maximumSize = Dimension(Int.MAX_VALUE, 30)
+            row.maximumSize = Dimension(Int.MAX_VALUE, 32)
+            row.border = JBUI.Borders.empty(1, 0)
             
             val cb = JBCheckBox(tag.name, tag.isSelected)
             if (!tag.isPresentInCurrentLog) cb.foreground = JBColor.RED
@@ -152,9 +145,9 @@ class TagFilterDialog(
             if (showIgnoreButton) {
                 val ignoreBtn = JButton(AllIcons.Actions.Forward).apply {
                     toolTipText = "Move to Ignored"
-                    preferredSize = Dimension(24, 24)
-                    isContentAreaFilled = false
-                    isBorderPainted = false
+                    preferredSize = Dimension(28, 24)
+                    margin = JBUI.emptyInsets()
+                    isFocusable = false
                 }
                 ignoreBtn.addActionListener {
                     ignoredTagsSet.add(tag.name)
@@ -227,15 +220,16 @@ class TagFilterDialog(
 
         groupTags.forEach { tagName ->
             val row = JPanel(BorderLayout())
-            row.maximumSize = Dimension(Int.MAX_VALUE, 30)
+            row.maximumSize = Dimension(Int.MAX_VALUE, 32)
+            row.border = JBUI.Borders.empty(1, 0)
             
             row.add(JBLabel(tagName), BorderLayout.CENTER)
 
             val restoreBtn = JButton(AllIcons.Actions.Back).apply {
                 toolTipText = "Restore from Ignored"
-                preferredSize = Dimension(24, 24)
-                isContentAreaFilled = false
-                isBorderPainted = false
+                preferredSize = Dimension(28, 24)
+                margin = JBUI.emptyInsets()
+                isFocusable = false
             }
             restoreBtn.addActionListener {
                 ignoredTagsSet.remove(tagName)
