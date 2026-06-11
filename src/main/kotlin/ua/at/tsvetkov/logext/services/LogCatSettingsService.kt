@@ -21,6 +21,13 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
         var levelColors: MutableMap<String, LevelAttributes> = mutableMapOf()
         var clearLogOnStart: Boolean = true
         var logFormat: String = "%d %p %t %l %g %m"
+        
+        var showDate: Boolean = true
+        var showTime: Boolean = true
+        var showMillis: Boolean = true
+        var showPid: Boolean = true
+        var showTid: Boolean = true
+        var tagWidth: Int = 23
     }
 
     data class LevelAttributes(

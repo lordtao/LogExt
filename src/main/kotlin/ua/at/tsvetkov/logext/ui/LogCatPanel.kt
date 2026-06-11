@@ -122,13 +122,16 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     private fun processSingleLine(line: String, header: LogFilterHeader) {
-        val threadtimeRegex = Regex("""\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
+        val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
         val matchResult = threadtimeRegex.find(line)
 
-        val pid = matchResult?.groupValues?.get(1)
-        val tid = matchResult?.groupValues?.get(2)
-        val levelChar = matchResult?.groupValues?.get(3)
-        val tagName = matchResult?.groupValues?.get(4)?.trim()
+        val date = matchResult?.groupValues?.get(1)
+        val time = matchResult?.groupValues?.get(2)
+        val millis = matchResult?.groupValues?.get(3)
+        val pid = matchResult?.groupValues?.get(4)
+        val tid = matchResult?.groupValues?.get(5)
+        val levelChar = matchResult?.groupValues?.get(6)
+        val tagName = matchResult?.groupValues?.get(7)?.trim()
 
         val isProcessInfoLine = line.contains("perfColdLaunchBoost")
         val processMatch = Regex("perfColdLaunchBoost: (.*?), (\\d+)").find(line)
@@ -181,7 +184,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             if (matchResult != null && tagName != null && levelChar != null) {
                 if (header.isLevelSelected(levelChar)) {
                     val isTagFromApp = isAppLine || (pid != null && tid != null && pid == tid)
-                    processParsedMessage(line, tagName, levelChar, isTagFromApp)
+                    
+                    val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, line)
+                    processParsedMessage(formattedLine, tagName, levelChar, isTagFromApp)
                 }
             } else {
                 val selectedTags = settings.getState().selectedTags
@@ -190,6 +195,40 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 }
             }
         }
+    }
+
+    private fun formatLineBySettings(
+        date: String?, time: String?, millis: String?, pid: String?, tid: String?,
+        levelChar: String?, tagName: String?, originalLine: String
+    ): String {
+        val state = settings.getState()
+        val sb = StringBuilder()
+        
+        if (state.showDate && date != null) sb.append(date).append(" ")
+        if (state.showTime && time != null) {
+            sb.append(time)
+            if (state.showMillis && millis != null) sb.append(".").append(millis)
+            sb.append(" ")
+        }
+        if (state.showPid && pid != null) sb.append(pid.padStart(5)).append(" ")
+        if (state.showTid && tid != null) sb.append(tid.padStart(5)).append(" ")
+        
+        if (levelChar != null) sb.append(levelChar).append(" ")
+        
+        if (tagName != null) {
+            val width = state.tagWidth
+            val formattedTag = if (width > 0) {
+                if (tagName.length > width) tagName.substring(0, width)
+                else tagName.padEnd(width)
+            } else tagName
+            sb.append(formattedTag).append(": ")
+        }
+        
+        // Извлекаем само сообщение (текст после "Tag: ")
+        val messagePart = originalLine.substringAfter("$tagName: ", "")
+        sb.append(messagePart)
+        
+        return sb.toString()
     }
 
     private fun processParsedMessage(line: String, tagName: String, levelChar: String, isAppTag: Boolean = false) {
@@ -205,19 +244,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         if (selectedTags == null || selectedTags.contains(tagName)) {
             printToConsole(line, levelChar)
         }
-    }
-
-    private fun formatParsedMessage(line: String, levelChar: String): String {
-        val fullLevel = when (levelChar) {
-            "V" -> "[VERBOSE]"
-            "D" -> "[DEBUG]"
-            "I" -> "[INFO]"
-            "W" -> "[WARN]"
-            "E" -> "[ERROR]"
-            "A" -> "[ASSERT]"
-            else -> "[$levelChar]"
-        }
-        return line.replaceFirst(" $levelChar ", " $fullLevel ")
     }
 
     private fun printToConsole(formattedMessage: String, levelChar: String) {
@@ -237,14 +263,18 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             consoleView.clear()
             val historyCopy = synchronized(rawLogsHistory) { rawLogsHistory.toList() }
             historyCopy.forEach { message ->
-                val threadtimeRegex = Regex("""\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
+                val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
                 val matchResult = threadtimeRegex.find(message)
                 if (matchResult != null) {
-                    val levelChar = matchResult.groupValues[3]
-                    val pid = matchResult.groupValues[1]
-                    val tid = matchResult.groupValues[2]
+                    val date = matchResult.groupValues[1]
+                    val time = matchResult.groupValues[2]
+                    val millis = matchResult.groupValues[3]
+                    val pid = matchResult.groupValues[4]
+                    val tid = matchResult.groupValues[5]
+                    val levelChar = matchResult.groupValues[6]
+                    val tagName = matchResult.groupValues[7].trim()
                     
-                    if (settings.isTagIgnored(matchResult.groupValues[4].trim())) return@forEach
+                    if (settings.isTagIgnored(tagName)) return@forEach
 
                     val selectedProcess = header.getSelectedProcess()
                     val targetPid = if (selectedProcess != null && selectedProcess != "All Processes") {
@@ -255,7 +285,8 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     
                     if (header.isLevelSelected(levelChar)) {
                         val isTagFromApp = (targetPid != null && pid == targetPid) || (pid == tid)
-                        processParsedMessage(message, matchResult.groupValues[4].trim(), levelChar, isTagFromApp)
+                        val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, message)
+                        processParsedMessage(formattedLine, tagName, levelChar, isTagFromApp)
                     }
                 } else {
                     val selectedProcess = header.getSelectedProcess()
@@ -282,18 +313,22 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         } else null
 
         historyCopy.forEach { message ->
-            val threadtimeRegex = Regex("""\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
+            val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
             val matchResult = threadtimeRegex.find(message)
             if (matchResult != null) {
-                val pid = matchResult.groupValues[1]
-                val tagName = matchResult.groupValues[4].trim()
+                val pid = matchResult.groupValues[4]
+                val tagName = matchResult.groupValues[7].trim()
                 if (targetPid == null || pid == targetPid) {
                     currentProcessTags.add(tagName)
                 }
             }
         }
 
-        return allTags.values.filter { it.name in currentProcessTags }.sortedBy { it.name }
+        // Возвращаем только теги, которые есть в текущем выводе ИЛИ выбраны пользователем.
+        // Это предотвращает бесконечное накопление неактивных тегов от прошлых сессий.
+        return allTags.values.filter { 
+            it.name in currentProcessTags || settings.isTagSelected(it.name) 
+        }.sortedBy { it.name }
     }
 
     private fun createToolbar() {

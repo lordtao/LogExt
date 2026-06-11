@@ -10,14 +10,9 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
 import ua.at.tsvetkov.logext.services.LogCatSettingsService
-import java.awt.Color
-import java.awt.Dimension
-import java.awt.Font
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import javax.swing.JComponent
-import javax.swing.JPanel
-import javax.swing.SwingConstants
+import java.awt.*
+import java.awt.event.ActionListener
+import javax.swing.*
 
 /**
  * Диалоговое окно настроек TAO LogExt.
@@ -26,12 +21,38 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
 
     private val settings = LogCatSettingsService.getInstance(project)
     private val colorPanels = mutableMapOf<String, Pair<ColorPanel, ColorPanel>>()
+    
+    // Startup Settings
     private val clearLogOnStartCheck = JBCheckBox("Clear log on application start", settings.getState().clearLogOnStart)
-    private val logFormatField = JBTextField(settings.getState().logFormat).apply { isEnabled = false }
+    
+    // Log Line View Settings
+    private val showDateCheck = JBCheckBox("Date", settings.getState().showDate)
+    private val showTimeCheck = JBCheckBox("Time", settings.getState().showTime)
+    private val showMillisCheck = JBCheckBox("Milliseconds", settings.getState().showMillis)
+    private val showPidCheck = JBCheckBox("Process ID", settings.getState().showPid)
+    private val showTidCheck = JBCheckBox("Thread ID", settings.getState().showTid)
+    private val tagWidthSpinner = JSpinner(SpinnerNumberModel(settings.getState().tagWidth, 0, 100, 1))
+    
+    private val formatPreviewLabel = JBLabel().apply {
+        font = Font(Font.MONOSPACED, Font.PLAIN, 12)
+        border = JBUI.Borders.compound(
+            JBUI.Borders.customLine(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground(), 1),
+            JBUI.Borders.empty(5)
+        )
+    }
 
     init {
         title = "TAO LogExt Settings"
         init()
+        updateFormatPreview()
+        
+        val updatePreviewListener = ActionListener { updateFormatPreview() }
+        showDateCheck.addActionListener(updatePreviewListener)
+        showTimeCheck.addActionListener(updatePreviewListener)
+        showMillisCheck.addActionListener(updatePreviewListener)
+        showPidCheck.addActionListener(updatePreviewListener)
+        showTidCheck.addActionListener(updatePreviewListener)
+        tagWidthSpinner.addChangeListener { updateFormatPreview() }
     }
 
     override fun createCenterPanel(): JComponent {
@@ -42,8 +63,22 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
         formBuilder.addComponent(createColorSettingsPanel())
 
         // 2. Настройки вида строки
-        formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Log Line View (Experimental)")))
-        formBuilder.addLabeledComponent("Log format:", logFormatField)
+        formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Log Line View")))
+        
+        val checkboxesPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 0))
+        checkboxesPanel.add(showDateCheck)
+        checkboxesPanel.add(showTimeCheck)
+        checkboxesPanel.add(showMillisCheck)
+        checkboxesPanel.add(showPidCheck)
+        checkboxesPanel.add(showTidCheck)
+        formBuilder.addComponent(checkboxesPanel)
+
+        val tagWidthPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 0))
+        tagWidthPanel.add(JBLabel("Tag width:"))
+        tagWidthPanel.add(tagWidthSpinner)
+        formBuilder.addComponent(tagWidthPanel)
+
+        formBuilder.addLabeledComponent("Preview:", formatPreviewLabel)
 
         // 3. Настройки старта
         formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Startup Settings")))
@@ -58,7 +93,6 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
         gbc.fill = GridBagConstraints.HORIZONTAL
         gbc.insets = JBUI.insets(2, 5)
 
-        // Заголовки колонок
         val headers = listOf("Level", "Foreground", "Background", "Example")
         headers.forEachIndexed { i, text ->
             gbc.gridx = i
@@ -87,34 +121,30 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
             gbc.gridy = index + 1
             gbc.weightx = 0.0
 
-            // Level Name
             gbc.gridx = 0
             panel.add(JBLabel(levelName), gbc)
 
-            // Foreground
             gbc.gridx = 1
             val fgPanel = ColorPanel()
             attrs.foregroundColor?.let { fgPanel.selectedColor = Color.decode(it) }
             panel.add(fgPanel, gbc)
 
-            // Background
             gbc.gridx = 2
             val bgPanel = ColorPanel()
             attrs.backgroundColor?.let { bgPanel.selectedColor = Color.decode(it) }
             panel.add(bgPanel, gbc)
 
-            // Example
             gbc.gridx = 3
             gbc.weightx = 1.0
             val exampleLabel = JBLabel(" Sample log message ").apply {
                 isOpaque = true
                 horizontalAlignment = SwingConstants.CENTER
                 preferredSize = Dimension(150, 24)
-                updateExample(this, fgPanel.selectedColor, bgPanel.selectedColor)
+                updateColorExample(this, fgPanel.selectedColor, bgPanel.selectedColor)
             }
             
-            fgPanel.addActionListener { updateExample(exampleLabel, fgPanel.selectedColor, bgPanel.selectedColor) }
-            bgPanel.addActionListener { updateExample(exampleLabel, fgPanel.selectedColor, bgPanel.selectedColor) }
+            fgPanel.addActionListener { updateColorExample(exampleLabel, fgPanel.selectedColor, bgPanel.selectedColor) }
+            bgPanel.addActionListener { updateColorExample(exampleLabel, fgPanel.selectedColor, bgPanel.selectedColor) }
             
             colorPanels[levelKey] = fgPanel to bgPanel
             panel.add(exampleLabel, gbc)
@@ -123,16 +153,50 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
         return panel
     }
 
-    private fun updateExample(label: JBLabel, fg: Color?, bg: Color?) {
+    private fun updateColorExample(label: JBLabel, fg: Color?, bg: Color?) {
         label.foreground = fg ?: JBUI.CurrentTheme.Label.foreground()
         label.background = bg ?: JBUI.CurrentTheme.CustomFrameDecorations.paneBackground()
+    }
+
+    private fun updateFormatPreview() {
+        val sb = StringBuilder()
+        if (showDateCheck.isSelected) sb.append("06-11 ")
+        if (showTimeCheck.isSelected) {
+            sb.append("18:30:26")
+            if (showMillisCheck.isSelected) sb.append(".582")
+            sb.append(" ")
+        }
+        if (showPidCheck.isSelected) sb.append("28025 ")
+        if (showTidCheck.isSelected) sb.append("28054 ")
+        
+        sb.append("D ")
+        
+        val width = tagWidthSpinner.value as Int
+        val tag = "GreedyScheduler"
+        val formattedTag = if (width > 0) {
+            if (tag.length > width) tag.substring(0, width)
+            else tag.padEnd(width)
+        } else tag
+        
+        sb.append("$formattedTag: Cancelling")
+        
+        formatPreviewLabel.text = sb.toString()
     }
 
     override fun doOKAction() {
         colorPanels.forEach { (level, panels) ->
             settings.setLevelAttributes(level, panels.first.selectedColor, panels.second.selectedColor)
         }
-        settings.getState().clearLogOnStart = clearLogOnStartCheck.isSelected
+        
+        val state = settings.getState()
+        state.clearLogOnStart = clearLogOnStartCheck.isSelected
+        state.showDate = showDateCheck.isSelected
+        state.showTime = showTimeCheck.isSelected
+        state.showMillis = showMillisCheck.isSelected
+        state.showPid = showPidCheck.isSelected
+        state.showTid = showTidCheck.isSelected
+        state.tagWidth = tagWidthSpinner.value as Int
+
         super.doOKAction()
     }
 }
