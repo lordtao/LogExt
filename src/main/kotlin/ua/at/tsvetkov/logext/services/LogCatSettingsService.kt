@@ -17,10 +17,8 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
         var selectedTags: Set<String>? = null
         var ignoredTags: MutableSet<String> = mutableSetOf()
         var lastSelectedProcess: String? = null
-        var fontSize: Int = 12
         var levelColors: MutableMap<String, LevelAttributes> = mutableMapOf()
         var clearLogOnStart: Boolean = true
-        var logFormat: String = "%d %p %t %l %g %m"
         
         var showDate: Boolean = true
         var showTime: Boolean = true
@@ -28,6 +26,8 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
         var showPid: Boolean = true
         var showTid: Boolean = true
         var tagWidth: Int = 23
+        var lastExportPath: String? = null
+        var minimizeForAi: Boolean = false
     }
 
     data class LevelAttributes(
@@ -41,9 +41,6 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
 
     override fun loadState(state: State) {
         myState = state
-        if (myState.ignoredTags == null) {
-            myState.ignoredTags = mutableSetOf()
-        }
     }
 
     fun getLevelAttributes(level: String): LevelAttributes {
@@ -99,7 +96,6 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
     fun setTagIgnored(tag: String, ignored: Boolean) {
         if (ignored) {
             myState.ignoredTags.add(tag)
-            // При добавлении в игнор снимаем выделение
             setTagSelected(tag, false)
         } else {
             myState.ignoredTags.remove(tag)

@@ -1,6 +1,8 @@
 package ua.at.tsvetkov.logext.ui
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.actionSystem.*
+import com.intellij.openapi.actionSystem.impl.ActionButton
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.DocumentAdapter
@@ -29,9 +31,26 @@ class TagFilterDialog(
     private val ignoredTagsSet = settings.getState().ignoredTags.toMutableSet()
     
     private val centerPanel = JPanel(GridLayout(1, 3, 10, 0))
-    private val searchField = SearchTextField()
+    private val searchField = SearchTextField(true)
     
-    private val tagComponents = mutableMapOf<String, JComponent>() // Имя тега -> Компонент строки
+    private var isMatchCaseActive = false
+    private val matchCaseAction = object : ToggleAction("Match Case", "Match case", AllIcons.Actions.MatchCase) {
+        override fun isSelected(e: AnActionEvent): Boolean = isMatchCaseActive
+        override fun setSelected(e: AnActionEvent, state: Boolean) {
+            isMatchCaseActive = state
+            applyFilter()
+        }
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+    }
+
+    private val matchCaseBtn = ActionButton(
+        matchCaseAction,
+        matchCaseAction.templatePresentation.clone(),
+        ActionPlaces.UNKNOWN,
+        ActionToolbar.DEFAULT_MINIMUM_BUTTON_SIZE
+    )
+    
+    private val tagComponents = mutableMapOf<String, JComponent>()
 
     init {
         title = "Filter Tags"
@@ -41,9 +60,14 @@ class TagFilterDialog(
     }
 
     override fun createNorthPanel(): JComponent {
-        val panel = JPanel(BorderLayout())
+        val panel = JPanel(BorderLayout(5, 0))
         panel.add(JBLabel("Quick search: "), BorderLayout.WEST)
-        panel.add(searchField, BorderLayout.CENTER)
+        
+        val searchPanel = JPanel(BorderLayout(5, 0))
+        searchPanel.add(searchField, BorderLayout.CENTER)
+        searchPanel.add(matchCaseBtn, BorderLayout.EAST)
+        
+        panel.add(searchPanel, BorderLayout.CENTER)
         panel.border = JBUI.Borders.emptyBottom(10)
         return panel
     }
@@ -56,27 +80,29 @@ class TagFilterDialog(
     private fun setupSearch() {
         searchField.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: DocumentEvent) {
-                val text = searchField.text.lowercase()
-                if (text.isEmpty()) return
-                
-                // Ищем первое совпадение в любой из колонок
-                for ((tagName, component) in tagComponents) {
-                    if (tagName.lowercase().contains(text)) {
-                        scrollToComponent(component)
-                        break
-                    }
-                }
+                applyFilter()
             }
         })
     }
 
-    private fun scrollToComponent(component: JComponent) {
-        val parent = component.parent
-        if (parent is JComponent) {
-            val rect = component.bounds
-            // Расширяем прямоугольник, чтобы он был виден в центре или сверху
-            parent.scrollRectToVisible(rect)
+    private fun applyFilter() {
+        val text = searchField.text
+        
+        for ((tagName, component) in tagComponents) {
+            val visible = if (text.isEmpty()) {
+                true
+            } else {
+                if (isMatchCaseActive) {
+                    tagName.contains(text)
+                } else {
+                    tagName.lowercase().contains(text.lowercase())
+                }
+            }
+            component.isVisible = visible
         }
+        
+        centerPanel.revalidate()
+        centerPanel.repaint()
     }
 
     private fun updatePanels() {
@@ -93,8 +119,7 @@ class TagFilterDialog(
         centerPanel.add(createTagGroupPanel("Other Tags", otherTags, true, true))
         centerPanel.add(createIgnoredGroupPanel("Ignored Tags", ignoredTagsNames))
         
-        centerPanel.revalidate()
-        centerPanel.repaint()
+        applyFilter()
     }
 
     private fun createTagGroupPanel(
@@ -150,13 +175,21 @@ class TagFilterDialog(
         val mainButtons = JPanel(GridLayout(1, 2))
         val selectAll = JButton("Select All")
         selectAll.addActionListener {
-            checkBoxes.forEach { it.isSelected = true }
-            groupTags.forEach { it.isSelected = true }
+            checkBoxes.forEach { 
+                if (it.parent.isVisible) {
+                    it.isSelected = true
+                    workingTags.find { t -> t.name == it.text }?.isSelected = true
+                }
+            }
         }
         val clearAll = JButton("Clear All")
         clearAll.addActionListener {
-            checkBoxes.forEach { it.isSelected = false }
-            groupTags.forEach { it.isSelected = false }
+            checkBoxes.forEach { 
+                if (it.parent.isVisible) {
+                    it.isSelected = false
+                    workingTags.find { t -> t.name == it.text }?.isSelected = false
+                }
+            }
         }
         mainButtons.add(selectAll)
         mainButtons.add(clearAll)
@@ -165,7 +198,12 @@ class TagFilterDialog(
         if (showIgnoreAll) {
             val ignoreAllBtn = JButton("Ignore all")
             ignoreAllBtn.addActionListener {
-                groupTags.forEach { ignoredTagsSet.add(it.name) }
+                groupTags.forEach { 
+                    val comp = tagComponents[it.name]
+                    if (comp != null && comp.isVisible) {
+                        ignoredTagsSet.add(it.name)
+                    }
+                }
                 updatePanels()
             }
             val btnRow = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))

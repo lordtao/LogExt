@@ -14,6 +14,7 @@ import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.VfsUtil
 import ua.at.tsvetkov.logext.models.TagInfo
 import ua.at.tsvetkov.logext.services.LogCatListenerService
@@ -21,6 +22,7 @@ import ua.at.tsvetkov.logext.services.LogCatSettingsService
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.datatransfer.StringSelection
+import java.io.File
 import javax.swing.JPanel
 import javax.swing.Timer
 
@@ -122,7 +124,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     private fun processSingleLine(line: String, header: LogFilterHeader) {
-        val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
+        val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):\s?(.*)""")
         val matchResult = threadtimeRegex.find(line)
 
         val date = matchResult?.groupValues?.get(1)
@@ -185,7 +187,8 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 if (header.isLevelSelected(levelChar)) {
                     val isTagFromApp = isAppLine || (pid != null && tid != null && pid == tid)
                     
-                    val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, line)
+                    val messagePart = matchResult.groupValues.getOrNull(8) ?: ""
+                    val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, messagePart)
                     processParsedMessage(formattedLine, tagName, levelChar, isTagFromApp)
                 }
             } else {
@@ -199,7 +202,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private fun formatLineBySettings(
         date: String?, time: String?, millis: String?, pid: String?, tid: String?,
-        levelChar: String?, tagName: String?, originalLine: String
+        levelChar: String?, tagName: String?, messagePart: String
     ): String {
         val state = settings.getState()
         val sb = StringBuilder()
@@ -224,8 +227,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             sb.append(formattedTag).append(": ")
         }
         
-        // Извлекаем само сообщение (текст после "Tag: ")
-        val messagePart = originalLine.substringAfter("$tagName: ", "")
         sb.append(messagePart)
         
         return sb.toString()
@@ -263,7 +264,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             consoleView.clear()
             val historyCopy = synchronized(rawLogsHistory) { rawLogsHistory.toList() }
             historyCopy.forEach { message ->
-                val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
+                val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):\s?(.*)""")
                 val matchResult = threadtimeRegex.find(message)
                 if (matchResult != null) {
                     val date = matchResult.groupValues[1]
@@ -285,7 +286,8 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     
                     if (header.isLevelSelected(levelChar)) {
                         val isTagFromApp = (targetPid != null && pid == targetPid) || (pid == tid)
-                        val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, message)
+                        val messagePart = matchResult.groupValues.getOrNull(8) ?: ""
+                        val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, messagePart)
                         processParsedMessage(formattedLine, tagName, levelChar, isTagFromApp)
                     }
                 } else {
@@ -302,7 +304,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     private fun getFilteredTagsForCurrentProcess(): List<TagInfo> {
-        val header = filterHeader ?: return allTags.values.toList()
+        val header = filterHeader ?: return emptyList()
         val selectedProcess = header.getSelectedProcess()
 
         val currentProcessTags = mutableSetOf<String>()
@@ -313,7 +315,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         } else null
 
         historyCopy.forEach { message ->
-            val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
+            val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):\s?(.*)""")
             val matchResult = threadtimeRegex.find(message)
             if (matchResult != null) {
                 val pid = matchResult.groupValues[4]
@@ -324,17 +326,20 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             }
         }
 
-        // Возвращаем только теги, которые есть в текущем выводе ИЛИ выбраны пользователем.
-        // Это предотвращает бесконечное накопление неактивных тегов от прошлых сессий.
-        return allTags.values.filter { 
-            it.name in currentProcessTags || settings.isTagSelected(it.name) 
-        }.sortedBy { it.name }
+        val filteredTags = allTags.values.filter { tag ->
+            tag.name in currentProcessTags || settings.isTagSelected(tag.name)
+        }.toMutableList()
+
+        filteredTags.forEach { tag ->
+            tag.isPresentInCurrentLog = tag.name in currentProcessTags
+        }
+
+        return filteredTags.sortedBy { it.name }
     }
 
     private fun createToolbar() {
         val actionGroup = DefaultActionGroup()
 
-        // 1. Scroll to the End
         actionGroup.add(object : ToggleAction("Scroll to the End", "Scroll to the end of log", AllIcons.RunConfigurations.Scroll_down) {
             override fun isSelected(e: AnActionEvent): Boolean = (consoleView as ConsoleViewImpl).editor?.let {
                 it.scrollingModel.verticalScrollOffset >= it.contentComponent.height - it.scrollingModel.visibleArea.height
@@ -349,7 +354,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
         })
 
-        // 2. Soft-Wrap
         actionGroup.add(object : ToggleAction("Soft-Wrap", "Toggle soft-wrap mode", AllIcons.Actions.ToggleSoftWrap) {
             override fun isSelected(e: AnActionEvent): Boolean = (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps ?: false
 
@@ -371,7 +375,13 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
         actionGroup.add(object : AnAction("Save Log", "Save log to file", AllIcons.Actions.MenuSaveall) {
             override fun actionPerformed(e: AnActionEvent) {
-                saveLogToFile()
+                val dialog = LogExportDialog(project)
+                if (dialog.showAndGet()) {
+                    val path = dialog.getExportPath()
+                    if (path.isNotEmpty()) {
+                        saveLogToFile(File(path), dialog.isMinimizeForAi())
+                    }
+                }
             }
         })
 
@@ -390,13 +400,15 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         add(toolbar.component, BorderLayout.WEST)
     }
 
-    private fun saveLogToFile() {
-        val descriptor = FileSaverDescriptor("Save Log", "Save LogCat output to file", "txt")
-        val saveDialog = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
-        val fileWrapper = saveDialog.save(VfsUtil.getUserHomeDir(), "logcat_output.txt")
-        fileWrapper?.let {
-            val text = (consoleView as ConsoleViewImpl).text
-            it.file.writeBytes(text.toByteArray())
+    private fun saveLogToFile(file: File, minimize: Boolean) {
+        try {
+            var text = (consoleView as ConsoleViewImpl).text
+            if (minimize) {
+                text = text.replace(Regex(" +"), " ")
+            }
+            FileUtil.writeToFile(file, text)
+        } catch (_: Exception) {
+
         }
     }
 

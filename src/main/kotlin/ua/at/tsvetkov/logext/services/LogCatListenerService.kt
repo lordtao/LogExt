@@ -24,7 +24,7 @@ class LogCatListenerService(private val project: Project) : Disposable {
             devices?.mapNotNull { device ->
                 device?.javaClass?.getMethod("getName")?.invoke(device) as? String
             } ?: emptyList()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }

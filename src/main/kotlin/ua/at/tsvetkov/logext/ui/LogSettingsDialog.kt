@@ -22,10 +22,8 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
     private val settings = LogCatSettingsService.getInstance(project)
     private val colorPanels = mutableMapOf<String, Pair<ColorPanel, ColorPanel>>()
     
-    // Startup Settings
     private val clearLogOnStartCheck = JBCheckBox("Clear log on application start", settings.getState().clearLogOnStart)
     
-    // Log Line View Settings
     private val showDateCheck = JBCheckBox("Date", settings.getState().showDate)
     private val showTimeCheck = JBCheckBox("Time", settings.getState().showTime)
     private val showMillisCheck = JBCheckBox("Milliseconds", settings.getState().showMillis)
@@ -58,11 +56,11 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
     override fun createCenterPanel(): JComponent {
         val formBuilder = FormBuilder.createFormBuilder()
 
-        // 1. Цветовые настройки
+        // Цветовые настройки
         formBuilder.addComponent(TitledSeparator("Color Settings"))
         formBuilder.addComponent(createColorSettingsPanel())
 
-        // 2. Настройки вида строки
+        // Настройки вида строки
         formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Log Line View")))
         
         val checkboxesPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 0))
@@ -80,7 +78,7 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
 
         formBuilder.addLabeledComponent("Preview:", formatPreviewLabel)
 
-        // 3. Настройки старта
+        // Настройки старта
         formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Startup Settings")))
         formBuilder.addComponent(clearLogOnStartCheck)
 
