@@ -1,0 +1,21 @@
+package ua.at.tsvetkov.logext.ui
+
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.wm.ToolWindow
+import com.intellij.openapi.wm.ToolWindowFactory
+import com.intellij.ui.content.ContentFactory
+
+/**
+ * Фабрика для создания боковой панели LogCat.
+ */
+class LogCatToolWindowFactory : ToolWindowFactory {
+
+    override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
+        val logCatPanel = LogCatPanel(project)
+        val content = ContentFactory.getInstance().createContent(logCatPanel, "", false)
+        toolWindow.contentManager.addContent(content)
+        
+        Disposer.register(toolWindow.contentManager, logCatPanel)
+    }
+}

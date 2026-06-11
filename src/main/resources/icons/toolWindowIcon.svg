@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+    <defs>
+
+
+        <!-- Контрастное белое свечение для молнии -->
+        <filter id="neon-glow-bw" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="1.2" result="blur" />
+            <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+            </feMerge>
+        </filter>
+
+    </defs>
+    <!-- Терминал с ушками и логами (идеально отцентрирован) -->
+    <g filter="url(#soft-shadow-bw)">
+        <!-- Внутренние ушки  -->
+        <path d="M 9.5,10 C 9.5,7.5 10.5,6 11.5,6 C 12.5,6 13.5,7.5 13.5,10" fill="#000000" />
+        <path d="M 22.5,10 C 22.5,7.5 23.5,6 24.5,6 C 25.5,6 26.5,7.5 26.5,10" fill="#000000" />
+
+        <!-- Корпус терминала -->
+        <rect x="5" y="10" width="30" height="22" rx="3" fill="#00000000" stroke="#000000" stroke-width="2" />
+
+        <!-- Три серые точки панели управления в шапке -->
+        <circle cx="8.5" cy="13.5" r="1" fill="#000000" />
+        <circle cx="11" cy="13.5" r="1" fill="#000000" />
+        <circle cx="13.5" cy="13.5" r="1" fill="#000000" />
+
+        <!-- Разделительная линия верхней панели консоли -->
+        <line x1="5" y1="16" x2="35" y2="16" stroke="#000000" stroke-width="2" />
+
+        <!-- Строки логов (переданы градацией серого и белого) -->
+        <!-- Строка 1: Debug (Белый) -->
+        <circle cx="9.5" cy="20" r="1.2" fill="#000000" />
+        <line x1="13" y1="20" x2="29" y2="20" stroke="#000000" stroke-width="2" stroke-linecap="round" />
+
+        <!-- Строка 2: Info (Светло-серый) -->
+        <circle cx="9.5" cy="24" r="1.2" fill="#000000" />
+        <line x1="13" y1="24" x2="23" y2="24" stroke="#000000" stroke-width="2" stroke-linecap="round" />
+
+        <!-- Строка 3: Warning (Темно-серый) -->
+        <circle cx="9.5" cy="28" r="1.2" fill="#000000" />
+        <line x1="13" y1="28" x2="21" y2="28" stroke="#000000" stroke-width="2" stroke-linecap="round" />
+    </g>
+
+    <!-- Яркая белая неоновая молния поверх консоли -->
+    <g filter="url(#neon-glow-bw)">
+        <!-- Белое ядро молнии с темно-серой обводкой -->
+        <path d="M 31,18 L 24,27 H 28 L 26,35 L 34,26 H 30 Z" fill="#000000" stroke="#00000000" stroke-width="0.6"
+            stroke-linejoin="round" />
+    </g>
+</svg>

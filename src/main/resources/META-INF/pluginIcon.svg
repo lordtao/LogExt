@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+    <defs>
+        <!-- Градиент для подложки всей иконки -->
+        <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#1E1F22"/>
+            <stop offset="100%" stop-color="#121315"/>
+        </linearGradient>
+
+        <!-- Градиент для тела консоли -->
+        <linearGradient id="console-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#2D3139"/>
+            <stop offset="100%" stop-color="#1B1D23"/>
+        </linearGradient>
+
+        <!-- Мягкое неоновое свечение для молнии -->
+        <filter id="neon-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="1.2" result="blur"/>
+            <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+        </filter>
+
+        <!-- Мягкая тень под консолью -->
+        <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="120%">
+            <feDropShadow dx="0" dy="1.5" stdDeviation="1" flood-color="#000000" flood-opacity="0.5"/>
+        </filter>
+    </defs>
+
+    <!-- Темный скругленный фон иконки -->
+    <rect x="1" y="1" width="38" height="38" rx="10" fill="url(#bg-grad)" stroke="#2D2F33" stroke-width="1"/>
+
+    <!-- Терминал с ушками и логами (отцентрирован по вертикали и горизонтали) -->
+    <g filter="url(#soft-shadow)">
+        <!-- Внутренние ушки (зеленое свечение Android) -->
+        <path d="M 9.5,10 C 9.5,7.5 10.5,6 11.5,6 C 12.5,6 13.5,7.5 13.5,10" fill="#3DDC84" opacity="0.6"/>
+        <path d="M 22.5,10 C 22.5,7.5 23.5,6 24.5,6 C 25.5,6 26.5,7.5 26.5,10" fill="#3DDC84" opacity="0.6"/>
+
+        <!-- Корпус терминала -->
+        <rect x="5" y="10" width="30" height="22" rx="3" fill="url(#console-grad)" stroke="#4E5157" stroke-width="1.2"/>
+
+        <!-- Три цветные точки панели управления в шапке -->
+        <circle cx="8.5" cy="13.5" r="0.8" fill="#FF5F56"/>
+        <circle cx="11" cy="13.5" r="0.8" fill="#FFBD2E"/>
+        <circle cx="13.5" cy="13.5" r="0.8" fill="#27C93F"/>
+
+        <!-- Разделительная линия верхней панели консоли -->
+        <line x1="5" y1="16" x2="35" y2="16" stroke="#35383D" stroke-width="1"/>
+
+        <!-- Строки логов (демонстрирующие работу LogCat, укорочены справа под молнию) -->
+        <!-- Строка 1: Debug (Синий) -->
+        <circle cx="9.5" cy="20" r="1.2" fill="#3574F0"/>
+        <line x1="13" y1="20" x2="29" y2="20" stroke="#8F94A3" stroke-width="2" stroke-linecap="round"/>
+
+        <!-- Строка 2: Info (Зеленый) -->
+        <circle cx="9.5" cy="24" r="1.2" fill="#3DDC84"/>
+        <line x1="13" y1="24" x2="23" y2="24" stroke="#8F94A3" stroke-width="2" stroke-linecap="round"/>
+
+        <!-- Строка 3: Warning (Оранжевый) -->
+        <circle cx="9.5" cy="28" r="1.2" fill="#FF9800"/>
+        <line x1="13" y1="28" x2="21" y2="28" stroke="#8F94A3" stroke-width="2" stroke-linecap="round"/>
+    </g>
+
+    <!-- Крупная неоновая молния (символ улучшения) поверх консоли -->
+    <g filter="url(#neon-glow)">
+        <!-- Внешнее зеленое свечение молнии -->
+        <path d="M 31,18 L 24,27 H 28 L 26,35 L 34,26 H 30 Z" fill="none" stroke="#3DDC84" stroke-width="2.5" stroke-linejoin="round"/>
+        <!-- Контрастное белое ядро молнии с тонкой голубой обводкой -->
+        <path d="M 31,18 L 24,27 H 28 L 26,35 L 34,26 H 30 Z" fill="#FFFFFF" stroke="#00B0FF" stroke-width="0.6" stroke-linejoin="round"/>
+    </g>
+</svg>
