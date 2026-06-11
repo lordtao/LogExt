@@ -14,7 +14,8 @@ import java.awt.Color
 class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.State> {
 
     class State {
-        var selectedTags: Set<String>? = null // null означает, что настройки еще не инициализированы
+        var selectedTags: Set<String>? = null
+        var ignoredTags: MutableSet<String> = mutableSetOf()
         var lastSelectedProcess: String? = null
         var fontSize: Int = 12
         var levelColors: MutableMap<String, LevelAttributes> = mutableMapOf()
@@ -33,12 +34,11 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
 
     override fun loadState(state: State) {
         myState = state
+        if (myState.ignoredTags == null) {
+            myState.ignoredTags = mutableSetOf()
+        }
     }
 
-    /**
-     * Возвращает атрибуты цвета для уровня. 
-     * Если пользователь не задал свои цвета, возвращает системные из текущей темы IDE.
-     */
     fun getLevelAttributes(level: String): LevelAttributes {
         val userAttrs = myState.levelColors[level]
         if (userAttrs != null && (userAttrs.foregroundColor != null || userAttrs.backgroundColor != null)) {
@@ -73,7 +73,7 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
     private fun colorToHex(color: Color): String = String.format("#%02x%02x%02x", color.red, color.green, color.blue)
 
     fun isTagSelected(tag: String): Boolean {
-        // Если selectedTags == null, значит плагин только запущен и все теги должны быть выбраны по умолчанию
+        if (isTagIgnored(tag)) return false
         return myState.selectedTags?.contains(tag) ?: true
     }
 
@@ -85,6 +85,18 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
     
     fun setSelectedTags(tags: Set<String>) {
         myState.selectedTags = tags
+    }
+
+    fun isTagIgnored(tag: String): Boolean = myState.ignoredTags.contains(tag)
+
+    fun setTagIgnored(tag: String, ignored: Boolean) {
+        if (ignored) {
+            myState.ignoredTags.add(tag)
+            // При добавлении в игнор снимаем выделение
+            setTagSelected(tag, false)
+        } else {
+            myState.ignoredTags.remove(tag)
+        }
     }
 
     companion object {

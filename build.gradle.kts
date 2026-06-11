@@ -6,8 +6,14 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.7.1"
 }
 
+val backNumber = 0
+
+val gitCommitNumber = providers.exec {
+    commandLine("git", "rev-list", "--count", "HEAD")
+}.standardOutput.asText.get().trim().toInt() - backNumber
+
 group = "ua.at.tsvetkov"
-version = "1.0-SNAPSHOT"
+version = "1.0.$gitCommitNumber"
 
 // Определяем путь к Android Studio. 
 // System.getProperty("idea.home.path") работает, если мы запускаем Gradle из-под самой IDE.

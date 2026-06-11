@@ -7,15 +7,17 @@ import com.intellij.util.ui.JBUI
 import java.awt.FlowLayout
 import java.awt.event.ActionListener
 import javax.swing.DefaultComboBoxModel
+import javax.swing.JButton
 import javax.swing.JPanel
 
 /**
- * Верхняя панель фильтрации (Устройство, Процесс и Уровни).
+ * Верхняя панель фильтрации (Устройство, Процесс, Фильтр тегов и Уровни).
  */
 class LogFilterHeader(
     private val onDeviceChanged: (String?) -> Unit,
     private val onProcessChanged: (String?) -> Unit,
-    private val onLevelsChanged: () -> Unit
+    private val onLevelsChanged: () -> Unit,
+    private val onTagFilterClicked: () -> Unit
 ) : JPanel(FlowLayout(FlowLayout.LEFT, 10, 5)) {
 
     private val deviceModel = DefaultComboBoxModel<String>()
@@ -51,6 +53,10 @@ class LogFilterHeader(
 
         deviceCombo.addActionListener(deviceListener)
         processCombo.addActionListener(processListener)
+
+        val tagFilterBtn = JButton("Tag filter")
+        tagFilterBtn.addActionListener { onTagFilterClicked() }
+        add(tagFilterBtn)
 
         add(JBLabel("Levels:"))
         listOf("V", "D", "I", "W", "E", "A").forEach { level ->

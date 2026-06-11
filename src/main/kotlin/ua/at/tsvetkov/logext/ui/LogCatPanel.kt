@@ -32,7 +32,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private val consoleView: ConsoleView = object : ConsoleViewImpl(project, true) {
         override fun createCompositeFilter(): com.intellij.execution.filters.CompositeFilter {
             val compositeFilter = com.intellij.execution.filters.CompositeFilter(project)
-            // Добавляем наш фильтр для создания ссылок на исходный код
             compositeFilter.addFilter(LogSourceLinkFilter(project))
             return compositeFilter
         }
@@ -60,6 +59,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             },
             onLevelsChanged = {
                 reFilterHistory()
+            },
+            onTagFilterClicked = {
+                showTagFilterDialog()
             }
         )
         filterHeader = header
@@ -68,6 +70,12 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         add(consoleView.component, BorderLayout.CENTER)
         createToolbar()
         Disposer.register(this, consoleView)
+
+        val initialDevices = listenerService.getConnectedDevices()
+        if (initialDevices.isNotEmpty()) {
+            header.updateDevices(initialDevices)
+            restartListening(initialDevices[0])
+        }
 
         Timer(5000) {
             val devices = listenerService.getConnectedDevices()
@@ -80,8 +88,16 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 }
             }
         }.start()
+    }
 
-        restartListening(null)
+    private fun showTagFilterDialog() {
+        val tagsToShow = getFilteredTagsForCurrentProcess()
+        val dialog = TagFilterDialog(project, tagsToShow)
+        if (dialog.showAndGet()) {
+            val newSelectedTags = tagsToShow.filter { it.isSelected }.map { it.name }.toSet()
+            settings.setSelectedTags(newSelectedTags)
+            reFilterHistory()
+        }
     }
 
     private fun restartListening(deviceName: String?) {
@@ -110,6 +126,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val matchResult = threadtimeRegex.find(line)
 
         val pid = matchResult?.groupValues?.get(1)
+        val tid = matchResult?.groupValues?.get(2)
         val levelChar = matchResult?.groupValues?.get(3)
         val tagName = matchResult?.groupValues?.get(4)?.trim()
 
@@ -142,12 +159,16 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }
 
         val selectedProcess = header.getSelectedProcess()
+        var isAppLine = false
         if (selectedProcess != null && selectedProcess != "All Processes") {
             val targetPid = pidToProcess.entries.find { it.value == selectedProcess }?.key
-            if (!isProcessInfoLine) {
-                if (pid == null || pid != targetPid) return
+            if (pid != null && pid == targetPid) {
+                isAppLine = true
             }
+            if (!isProcessInfoLine && !isAppLine) return
         }
+
+        if (tagName != null && settings.isTagIgnored(tagName)) return
 
         synchronized(rawLogsHistory) {
             rawLogsHistory.add(line)
@@ -159,10 +180,10 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         ApplicationManager.getApplication().invokeLater {
             if (matchResult != null && tagName != null && levelChar != null) {
                 if (header.isLevelSelected(levelChar)) {
-                    processParsedMessage(line, tagName, levelChar)
+                    val isTagFromApp = isAppLine || (pid != null && tid != null && pid == tid)
+                    processParsedMessage(line, tagName, levelChar, isTagFromApp)
                 }
             } else {
-                // Строки без тега (системные) показываем только если фильтр тегов не ограничивает вывод
                 val selectedTags = settings.getState().selectedTags
                 if (selectedTags == null) {
                     consoleView.print(line + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
@@ -171,14 +192,16 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }
     }
 
-    private fun processParsedMessage(line: String, tagName: String, levelChar: String) {
+    private fun processParsedMessage(line: String, tagName: String, levelChar: String, isAppTag: Boolean = false) {
+        if (settings.isTagIgnored(tagName)) return
+
         val tagInfo = allTags.getOrPut(tagName) {
-            TagInfo(tagName, isSelected = settings.isTagSelected(tagName))
+            TagInfo(tagName, isSelected = settings.isTagSelected(tagName), isApplicationTag = isAppTag)
         }
         tagInfo.isPresentInCurrentLog = true
+        if (isAppTag) tagInfo.isApplicationTag = true
 
         val selectedTags = settings.getState().selectedTags
-        // Если selectedTags == null, значит выбраны ВСЕ теги (по умолчанию)
         if (selectedTags == null || selectedTags.contains(tagName)) {
             printToConsole(line, levelChar)
         }
@@ -219,7 +242,10 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 if (matchResult != null) {
                     val levelChar = matchResult.groupValues[3]
                     val pid = matchResult.groupValues[1]
+                    val tid = matchResult.groupValues[2]
                     
+                    if (settings.isTagIgnored(matchResult.groupValues[4].trim())) return@forEach
+
                     val selectedProcess = header.getSelectedProcess()
                     val targetPid = if (selectedProcess != null && selectedProcess != "All Processes") {
                         pidToProcess.entries.find { it.value == selectedProcess }?.key
@@ -228,7 +254,8 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     if (targetPid != null && pid != targetPid) return@forEach
                     
                     if (header.isLevelSelected(levelChar)) {
-                        processParsedMessage(message, matchResult.groupValues[4].trim(), levelChar)
+                        val isTagFromApp = (targetPid != null && pid == targetPid) || (pid == tid)
+                        processParsedMessage(message, matchResult.groupValues[4].trim(), levelChar, isTagFromApp)
                     }
                 } else {
                     val selectedProcess = header.getSelectedProcess()
@@ -247,40 +274,58 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val header = filterHeader ?: return allTags.values.toList()
         val selectedProcess = header.getSelectedProcess()
 
-        if (selectedProcess != null && selectedProcess != "All Processes") {
-            val targetPid = pidToProcess.entries.find { it.value == selectedProcess }?.key
-            if (targetPid != null) {
-                val processTags = mutableSetOf<String>()
-                val historyCopy = synchronized(rawLogsHistory) { rawLogsHistory.toList() }
+        val currentProcessTags = mutableSetOf<String>()
+        val historyCopy = synchronized(rawLogsHistory) { rawLogsHistory.toList() }
+        
+        val targetPid = if (selectedProcess != null && selectedProcess != "All Processes") {
+            pidToProcess.entries.find { it.value == selectedProcess }?.key
+        } else null
 
-                historyCopy.forEach { message ->
-                    val threadtimeRegex = Regex("""\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
-                    val matchResult = threadtimeRegex.find(message)
-                    if (matchResult != null && matchResult.groupValues[1] == targetPid) {
-                        processTags.add(matchResult.groupValues[4].trim())
-                    }
+        historyCopy.forEach { message ->
+            val threadtimeRegex = Regex("""\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):""")
+            val matchResult = threadtimeRegex.find(message)
+            if (matchResult != null) {
+                val pid = matchResult.groupValues[1]
+                val tagName = matchResult.groupValues[4].trim()
+                if (targetPid == null || pid == targetPid) {
+                    currentProcessTags.add(tagName)
                 }
-
-                return allTags.values.filter { it.name in processTags || settings.isTagSelected(it.name) }
             }
         }
-        return allTags.values.toList()
+
+        return allTags.values.filter { it.name in currentProcessTags }.sortedBy { it.name }
     }
 
     private fun createToolbar() {
         val actionGroup = DefaultActionGroup()
 
-        actionGroup.add(object : AnAction("Filter Tags", "Filter by tags", AllIcons.General.Filter) {
-            override fun actionPerformed(e: AnActionEvent) {
-                val tagsToShow = getFilteredTagsForCurrentProcess()
-                val dialog = TagFilterDialog(project, tagsToShow)
-                if (dialog.showAndGet()) {
-                    val newSelectedTags = tagsToShow.filter { it.isSelected }.map { it.name }.toSet()
-                    settings.setSelectedTags(newSelectedTags)
-                    reFilterHistory()
+        // 1. Scroll to the End
+        actionGroup.add(object : ToggleAction("Scroll to the End", "Scroll to the end of log", AllIcons.RunConfigurations.Scroll_down) {
+            override fun isSelected(e: AnActionEvent): Boolean = (consoleView as ConsoleViewImpl).editor?.let {
+                it.scrollingModel.verticalScrollOffset >= it.contentComponent.height - it.scrollingModel.visibleArea.height
+            } ?: true
+
+            override fun setSelected(e: AnActionEvent, state: Boolean) {
+                if (state) {
+                    (consoleView as ConsoleViewImpl).scrollToEnd()
                 }
             }
+            
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
         })
+
+        // 2. Soft-Wrap
+        actionGroup.add(object : ToggleAction("Soft-Wrap", "Toggle soft-wrap mode", AllIcons.Actions.ToggleSoftWrap) {
+            override fun isSelected(e: AnActionEvent): Boolean = (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps ?: false
+
+            override fun setSelected(e: AnActionEvent, state: Boolean) {
+                (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps = state
+            }
+
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        })
+
+        actionGroup.addSeparator()
 
         actionGroup.add(object : AnAction("Copy Log", "Copy current log", AllIcons.Actions.Copy) {
             override fun actionPerformed(e: AnActionEvent) {
