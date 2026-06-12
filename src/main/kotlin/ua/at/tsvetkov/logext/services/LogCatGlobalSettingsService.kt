@@ -29,6 +29,7 @@ class LogCatGlobalSettingsService : PersistentStateComponent<LogCatGlobalSetting
         
         var lastExportPath: String? = null
         var minimizeForAi: Boolean = false
+        var showDuplicateTags: Boolean = false
     }
 
     data class LevelAttributes(

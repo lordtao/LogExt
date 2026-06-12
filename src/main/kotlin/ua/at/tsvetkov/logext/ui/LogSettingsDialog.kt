@@ -31,6 +31,7 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
     private val showMillisCheck = JBCheckBox("Milliseconds", globalSettings.state.showMillis)
     private val showPidCheck = JBCheckBox("Process ID", globalSettings.state.showPid)
     private val showTidCheck = JBCheckBox("Thread ID", globalSettings.state.showTid)
+    private val showDuplicateTagsCheck = JBCheckBox("Show duplicate tags/metadata", globalSettings.state.showDuplicateTags)
     private val tagWidthSpinner = JSpinner(SpinnerNumberModel(globalSettings.state.tagWidth, 0, 100, 1))
     
     private val formatPreviewLabel = JBLabel().apply {
@@ -52,6 +53,7 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
         showMillisCheck.addActionListener(updatePreviewListener)
         showPidCheck.addActionListener(updatePreviewListener)
         showTidCheck.addActionListener(updatePreviewListener)
+        showDuplicateTagsCheck.addActionListener(updatePreviewListener)
         tagWidthSpinner.addChangeListener { updateFormatPreview() }
     }
 
@@ -72,6 +74,10 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
         checkboxesPanel.add(showPidCheck)
         checkboxesPanel.add(showTidCheck)
         formBuilder.addComponent(checkboxesPanel)
+
+        val duplicateTagsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 0))
+        duplicateTagsPanel.add(showDuplicateTagsCheck)
+        formBuilder.addComponent(duplicateTagsPanel)
 
         val tagWidthPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 0))
         tagWidthPanel.add(JBLabel("Tag width:"))
@@ -198,6 +204,7 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
         state.showPid = showPidCheck.isSelected
         state.showTid = showTidCheck.isSelected
         state.tagWidth = tagWidthSpinner.value as Int
+        state.showDuplicateTags = showDuplicateTagsCheck.isSelected
 
         super.doOKAction()
     }

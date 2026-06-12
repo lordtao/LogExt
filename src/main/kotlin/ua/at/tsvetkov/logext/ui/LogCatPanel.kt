@@ -52,6 +52,8 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private var filterHeader: LogFilterHeader? = null
     private var currentDevice: String? = null
+    
+    private var lastMetadata: String? = null
 
     init {
         val header = LogFilterHeader(
@@ -143,6 +145,23 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 }
             }
         }.start()
+
+        // Форсированный перезапуск через 3 секунды для получения актуального лога и процессов
+        Timer(3000) {
+            val devices = listenerService.getConnectedDevices()
+            if (devices.isNotEmpty()) {
+                val activeDevice = header.getSelectedDevice() ?: devices[0]
+                currentDevice = activeDevice
+                restartListening(activeDevice)
+                
+                val adbProcesses = listenerService.getProcessList(activeDevice)
+                if (adbProcesses.isNotEmpty()) {
+                    adbProcesses.forEach { (pid, pkg) -> pidToProcess[pid] = pkg }
+                    val savedProcess = settings.getState().lastSelectedProcess
+                    header.updateProcesses(pidToProcess.values.distinct().sorted(), savedProcess)
+                }
+            }
+        }.apply { isRepeats = false }.start()
     }
 
     private fun showTagFilterDialog() {
@@ -160,6 +179,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             rawLogsHistory.clear()
             allTags.clear()
             pidToProcess.clear()
+            lastMetadata = null
             ApplicationManager.getApplication().invokeLater {
                 consoleView.clear()
             }
@@ -204,6 +224,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                             rawLogsHistory.clear()
                             allTags.clear()
                             pidToProcess.clear()
+                            lastMetadata = null
                             consoleView.clear()
                         }
                     }
@@ -261,8 +282,12 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     val isTagFromApp = isAppLine || (pid != null && tid != null && pid == tid)
                     
                     val messagePart = matchResult.groupValues.getOrNull(8) ?: ""
-                    val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, messagePart)
+                    val currentMetadata = "$date $time.$millis $pid $tid $levelChar $tagName"
+                    
+                    val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, messagePart, currentMetadata)
                     processParsedMessage(formattedLine, tagName, levelChar, isTagFromApp)
+                    
+                    lastMetadata = currentMetadata
                 }
             } else {
                 val selectedTags = settings.getState().selectedTags
@@ -275,9 +300,36 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private fun formatLineBySettings(
         date: String?, time: String?, millis: String?, pid: String?, tid: String?,
-        levelChar: String?, tagName: String?, messagePart: String
+        levelChar: String?, tagName: String?, messagePart: String, currentMetadata: String
     ): String {
         val state = globalSettings.state
+        
+        // Логика скрытия дубликатов
+        if (!state.showDuplicateTags && lastMetadata == currentMetadata) {
+            val sb = StringBuilder()
+            
+            // Собираем пустую строку той же длины, что и метаданные
+            if (state.showDate && date != null) sb.append(" ".repeat(date.length + 1))
+            if (state.showTime && time != null) {
+                sb.append(" ".repeat(time.length))
+                if (state.showMillis && millis != null) sb.append(" ".repeat(millis.length + 1))
+                sb.append(" ")
+            }
+            if (state.showPid && pid != null) sb.append(" ".repeat(6))
+            if (state.showTid && tid != null) sb.append(" ".repeat(6))
+            
+            if (levelChar != null) sb.append("  ") // Буква + пробел
+            
+            if (tagName != null) {
+                val width = state.tagWidth
+                val tagLen = if (width > 0) width else tagName.length
+                sb.append(" ".repeat(tagLen + 1))
+            }
+            
+            sb.append(messagePart)
+            return sb.toString()
+        }
+
         val sb = StringBuilder()
         
         if (state.showDate && date != null) sb.append(date).append(" ")
@@ -297,7 +349,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 if (tagName.length > width) tagName.substring(0, width)
                 else tagName.padEnd(width)
             } else tagName
-            sb.append(formattedTag).append(": ")
+            sb.append(formattedTag).append(" ")
         }
         
         sb.append(messagePart)
@@ -335,6 +387,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val header = filterHeader ?: return
         ApplicationManager.getApplication().invokeLater {
             consoleView.clear()
+            lastMetadata = null
             val historyCopy = synchronized(rawLogsHistory) { rawLogsHistory.toList() }
             historyCopy.forEach { message ->
                 val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):\s?(.*)""")
@@ -360,8 +413,12 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     if (header.isLevelSelected(levelChar)) {
                         val isTagFromApp = (targetPid != null && pid == targetPid) || (pid == tid)
                         val messagePart = matchResult.groupValues.getOrNull(8) ?: ""
-                        val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, messagePart)
+                        val currentMetadata = "$date $time.$millis $pid $tid $levelChar $tagName"
+                        
+                        val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, messagePart, currentMetadata)
                         processParsedMessage(formattedLine, tagName, levelChar, isTagFromApp)
+                        
+                        lastMetadata = currentMetadata
                     }
                 } else {
                     val selectedProcess = header.getSelectedProcess()
