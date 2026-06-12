@@ -17,7 +17,7 @@ import javax.swing.*
 import javax.swing.event.DocumentEvent
 
 /**
- * Диалоговое окно для фильтрации тегов с тремя группами: App, Other, Ignored.
+ * Диалоговое окно для фильтрации тегов с двумя группами: Tags и Ignored.
  */
 class TagFilterDialog(
     project: Project,
@@ -28,7 +28,7 @@ class TagFilterDialog(
     private val workingTags = allTags.toMutableList()
     private val ignoredTagsSet = settings.getState().ignoredTags.toMutableSet()
     
-    private val centerPanel = JPanel(GridLayout(1, 3, 10, 0))
+    private val centerPanel = JPanel(GridLayout(1, 2, 10, 0))
     private val searchField = SearchTextField(true)
     
     private var isMatchCaseActive = false
@@ -61,7 +61,7 @@ class TagFilterDialog(
     }
 
     override fun createCenterPanel(): JComponent {
-        centerPanel.preferredSize = Dimension(1300, 600)
+        centerPanel.preferredSize = Dimension(900, 600)
         return centerPanel
     }
 
@@ -101,14 +101,13 @@ class TagFilterDialog(
         centerPanel.removeAll()
         tagComponents.clear()
         
-        val appTags = workingTags.filter { it.isApplicationTag && !ignoredTagsSet.contains(it.name) }
-            .sortedBy { it.name }
-        val otherTags = workingTags.filter { !it.isApplicationTag && !ignoredTagsSet.contains(it.name) }
-            .sortedBy { it.name }
+        // Объединяем все активные теги в один список
+        val activeTags = workingTags.filter { !ignoredTagsSet.contains(it.name) }
+            .sortedWith(compareByDescending<TagInfo> { it.isApplicationTag }.thenBy { it.name })
+        
         val ignoredTagsNames = ignoredTagsSet.toList().sorted()
 
-        centerPanel.add(createTagGroupPanel("Process Tags", appTags, true, false))
-        centerPanel.add(createTagGroupPanel("Other Tags", otherTags, true, true))
+        centerPanel.add(createTagGroupPanel("Tags", activeTags, true))
         centerPanel.add(createIgnoredGroupPanel("Ignored Tags", ignoredTagsNames))
         
         applyFilter()
@@ -117,8 +116,7 @@ class TagFilterDialog(
     private fun createTagGroupPanel(
         title: String, 
         groupTags: List<TagInfo>, 
-        showIgnoreButton: Boolean,
-        showIgnoreAll: Boolean
+        showIgnoreButton: Boolean
     ): JPanel {
         val panel = JPanel(BorderLayout())
         panel.add(JBLabel(title).apply {
@@ -136,7 +134,13 @@ class TagFilterDialog(
             row.maximumSize = Dimension(Int.MAX_VALUE, 32)
             row.border = JBUI.Borders.empty(1, 0)
             
-            val cb = JBCheckBox(tag.name, tag.isSelected)
+            // Если тег относится к приложению, выделим его жирным шрифтом для наглядности после объединения
+            val cb = JBCheckBox(tag.name, tag.isSelected).apply {
+                if (tag.isApplicationTag) {
+                    font = font.deriveFont(Font.BOLD)
+                }
+            }
+            
             if (!tag.isPresentInCurrentLog) cb.foreground = JBColor.RED
             cb.addActionListener { tag.isSelected = cb.isSelected }
             checkBoxes.add(cb)
@@ -188,21 +192,19 @@ class TagFilterDialog(
         mainButtons.add(clearAll)
         footer.add(mainButtons)
 
-        if (showIgnoreAll) {
-            val ignoreAllBtn = JButton("Ignore all")
-            ignoreAllBtn.addActionListener {
-                groupTags.forEach { 
-                    val comp = tagComponents[it.name]
-                    if (comp != null && comp.isVisible) {
-                        ignoredTagsSet.add(it.name)
-                    }
+        val ignoreAllBtn = JButton("Ignore all")
+        ignoreAllBtn.addActionListener {
+            groupTags.forEach { 
+                val comp = tagComponents[it.name]
+                if (comp != null && comp.isVisible) {
+                    ignoredTagsSet.add(it.name)
                 }
-                updatePanels()
             }
-            val btnRow = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
-            btnRow.add(ignoreAllBtn)
-            footer.add(btnRow)
+            updatePanels()
         }
+        val btnRow = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
+        btnRow.add(ignoreAllBtn)
+        footer.add(btnRow)
 
         panel.add(footer, BorderLayout.SOUTH)
         return panel
@@ -219,11 +221,9 @@ class TagFilterDialog(
         listPanel.layout = BoxLayout(listPanel, BoxLayout.Y_AXIS)
 
         groupTags.forEach { tagName ->
-            val row = JPanel(BorderLayout())
+            val row = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
             row.maximumSize = Dimension(Int.MAX_VALUE, 32)
             row.border = JBUI.Borders.empty(1, 0)
-            
-            row.add(JBLabel(tagName), BorderLayout.CENTER)
 
             val restoreBtn = JButton(AllIcons.Actions.Back).apply {
                 toolTipText = "Restore from Ignored"
@@ -235,8 +235,13 @@ class TagFilterDialog(
                 ignoredTagsSet.remove(tagName)
                 updatePanels()
             }
-            row.add(restoreBtn, BorderLayout.EAST)
-            
+            row.add(restoreBtn)
+
+            val label = JBLabel(tagName).apply {
+                border = JBUI.Borders.emptyLeft(5)
+            }
+            row.add(label)
+
             tagComponents[tagName] = row
             listPanel.add(row)
         }
