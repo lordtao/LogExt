@@ -6,10 +6,9 @@ import com.intellij.ui.ColorPanel
 import com.intellij.ui.TitledSeparator
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
-import ua.at.tsvetkov.logext.services.LogCatSettingsService
+import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
 import java.awt.*
 import java.awt.event.ActionListener
 import javax.swing.*
@@ -19,17 +18,20 @@ import javax.swing.*
  */
 class LogSettingsDialog(project: Project) : DialogWrapper(project) {
 
-    private val settings = LogCatSettingsService.getInstance(project)
+    private val globalSettings = LogCatGlobalSettingsService.getInstance()
     private val colorPanels = mutableMapOf<String, Pair<ColorPanel, ColorPanel>>()
     
-    private val clearLogOnStartCheck = JBCheckBox("Clear log on application start", settings.getState().clearLogOnStart)
+    // Startup Settings
+    private val clearLogOnStartCheck = JBCheckBox("Clear log on application start", globalSettings.state.clearLogOnStart)
+    private val openOnStartCheck = JBCheckBox("Open tool window on application start", globalSettings.state.openOnStart)
     
-    private val showDateCheck = JBCheckBox("Date", settings.getState().showDate)
-    private val showTimeCheck = JBCheckBox("Time", settings.getState().showTime)
-    private val showMillisCheck = JBCheckBox("Milliseconds", settings.getState().showMillis)
-    private val showPidCheck = JBCheckBox("Process ID", settings.getState().showPid)
-    private val showTidCheck = JBCheckBox("Thread ID", settings.getState().showTid)
-    private val tagWidthSpinner = JSpinner(SpinnerNumberModel(settings.getState().tagWidth, 0, 100, 1))
+    // Log Line View Settings
+    private val showDateCheck = JBCheckBox("Date", globalSettings.state.showDate)
+    private val showTimeCheck = JBCheckBox("Time", globalSettings.state.showTime)
+    private val showMillisCheck = JBCheckBox("Milliseconds", globalSettings.state.showMillis)
+    private val showPidCheck = JBCheckBox("Process ID", globalSettings.state.showPid)
+    private val showTidCheck = JBCheckBox("Thread ID", globalSettings.state.showTid)
+    private val tagWidthSpinner = JSpinner(SpinnerNumberModel(globalSettings.state.tagWidth, 0, 100, 1))
     
     private val formatPreviewLabel = JBLabel().apply {
         font = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -56,11 +58,11 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
     override fun createCenterPanel(): JComponent {
         val formBuilder = FormBuilder.createFormBuilder()
 
-        // Цветовые настройки
+        // 1. Цветовые настройки
         formBuilder.addComponent(TitledSeparator("Color Settings"))
         formBuilder.addComponent(createColorSettingsPanel())
 
-        // Настройки вида строки
+        // 2. Настройки вида строки
         formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Log Line View")))
         
         val checkboxesPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 0))
@@ -78,9 +80,10 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
 
         formBuilder.addLabeledComponent("Preview:", formatPreviewLabel)
 
-        // Настройки старта
+        // 3. Настройки старта
         formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Startup Settings")))
         formBuilder.addComponent(clearLogOnStartCheck)
+        formBuilder.addComponent(openOnStartCheck)
 
         return formBuilder.panel
     }
@@ -114,7 +117,7 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
         levels.entries.forEachIndexed { index, entry ->
             val levelKey = entry.key
             val levelName = entry.value
-            val attrs = settings.getLevelAttributes(levelKey)
+            val attrs = globalSettings.getLevelAttributes(levelKey)
 
             gbc.gridy = index + 1
             gbc.weightx = 0.0
@@ -183,11 +186,12 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
 
     override fun doOKAction() {
         colorPanels.forEach { (level, panels) ->
-            settings.setLevelAttributes(level, panels.first.selectedColor, panels.second.selectedColor)
+            globalSettings.setLevelAttributes(level, panels.first.selectedColor, panels.second.selectedColor)
         }
         
-        val state = settings.getState()
+        val state = globalSettings.state
         state.clearLogOnStart = clearLogOnStartCheck.isSelected
+        state.openOnStart = openOnStartCheck.isSelected
         state.showDate = showDateCheck.isSelected
         state.showTime = showTimeCheck.isSelected
         state.showMillis = showMillisCheck.isSelected

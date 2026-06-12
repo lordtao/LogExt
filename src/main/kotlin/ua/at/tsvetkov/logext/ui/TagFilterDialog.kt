@@ -12,6 +12,7 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import ua.at.tsvetkov.logext.models.TagInfo
+import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
 import ua.at.tsvetkov.logext.services.LogCatSettingsService
 import java.awt.*
 import javax.swing.*
@@ -26,8 +27,9 @@ class TagFilterDialog(
 ) : DialogWrapper(project) {
 
     private val settings = LogCatSettingsService.getInstance(project)
+    private val globalSettings = LogCatGlobalSettingsService.getInstance()
     private val workingTags = allTags.toMutableList()
-    private val ignoredTagsSet = settings.getState().ignoredTags.toMutableSet()
+    private val ignoredTagsSet = globalSettings.state.ignoredTags.toMutableSet()
 
     private val centerPanel = JPanel(GridLayout(1, 2, 10, 0))
     private val searchArea = JBTextArea(2, 50).apply {
@@ -47,6 +49,8 @@ class TagFilterDialog(
         toolTipText = "Match Case"
         preferredSize = Dimension(28, 24)
         isFocusable = false
+        putClientProperty("ActionToolbar.smallVariant", true)
+        border = JBUI.Borders.empty(2)
     }
 
     private val tagComponents = mutableMapOf<String, JComponent>()
@@ -54,7 +58,7 @@ class TagFilterDialog(
     init {
         title = "Filter Tags"
 
-        // Восстановление состояния поиска
+        // Восстановление состояния поиска из настроек проекта
         val state = settings.getState()
         searchArea.text = state.lastTagSearch
         matchCaseBtn.isSelected = state.lastTagMatchCase
@@ -124,7 +128,6 @@ class TagFilterDialog(
         val query = searchArea.text
         val matchCase = matchCaseBtn.isSelected
 
-        // Разделяем запрос на слова по пробелам и переводам строк
         val searchTerms = query.split(Regex("[\\s\\n\\r]+")).filter { it.isNotEmpty() }
 
         for ((tagName, component) in tagComponents) {
@@ -306,10 +309,14 @@ class TagFilterDialog(
     }
 
     override fun doOKAction() {
+        // Сохраняем глобальный черный список
+        globalSettings.state.ignoredTags = ignoredTagsSet
+        
+        // Сохраняем состояние поиска текущего проекта
         val state = settings.getState()
-        state.ignoredTags = ignoredTagsSet
         state.lastTagSearch = searchArea.text
         state.lastTagMatchCase = matchCaseBtn.isSelected
+
         super.doOKAction()
     }
 }

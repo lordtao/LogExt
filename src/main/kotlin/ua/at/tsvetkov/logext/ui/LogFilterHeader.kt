@@ -109,5 +109,7 @@ class LogFilterHeader(
 
     fun getSelectedProcess(): String? = processCombo.selectedItem as? String
 
+    fun getSelectedDevice(): String? = deviceCombo.selectedItem as? String
+
     fun isLevelSelected(levelChar: String): Boolean = levelChecks[levelChar]?.isSelected ?: true
 }

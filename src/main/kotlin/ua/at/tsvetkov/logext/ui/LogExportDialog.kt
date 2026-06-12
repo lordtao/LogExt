@@ -9,7 +9,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.util.ui.FormBuilder
-import ua.at.tsvetkov.logext.services.LogCatSettingsService
+import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
 import java.io.File
 import javax.swing.JComponent
 
@@ -18,19 +18,18 @@ import javax.swing.JComponent
  */
 class LogExportDialog(private val project: Project) : DialogWrapper(project) {
 
-    private val settings = LogCatSettingsService.getInstance(project)
+    private val globalSettings = LogCatGlobalSettingsService.getInstance()
     private val pathField = TextFieldWithBrowseButton()
-    private val minimizeCheck = JBCheckBox("Minimize for AI (collapse multiple spaces)", settings.getState().minimizeForAi)
+    private val minimizeCheck = JBCheckBox("Minimize for AI (collapse multiple spaces)", globalSettings.state.minimizeForAi)
 
     init {
         title = "Export Logs"
-        pathField.text = settings.getState().lastExportPath ?: ""
+        pathField.text = globalSettings.state.lastExportPath ?: ""
         
         pathField.addActionListener {
             val descriptor = FileSaverDescriptor("Select Export File", "Enter the name of the file to save logs to", "txt")
             val saveDialog = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
             
-            // Пытаемся открыть диалог в текущей папке из поля ввода или в домашней папке
             val currentFile = File(pathField.text)
             val baseDir = if (currentFile.parentFile?.exists() == true) {
                 LocalFileSystem.getInstance().findFileByIoFile(currentFile.parentFile)
@@ -58,7 +57,7 @@ class LogExportDialog(private val project: Project) : DialogWrapper(project) {
     fun isMinimizeForAi(): Boolean = minimizeCheck.isSelected
 
     override fun doOKAction() {
-        val state = settings.getState()
+        val state = globalSettings.state
         state.lastExportPath = pathField.text
         state.minimizeForAi = minimizeCheck.isSelected
         super.doOKAction()

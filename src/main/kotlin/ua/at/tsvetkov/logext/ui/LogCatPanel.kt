@@ -17,6 +17,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.VfsUtil
 import ua.at.tsvetkov.logext.models.TagInfo
+import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
 import ua.at.tsvetkov.logext.services.LogCatListenerService
 import ua.at.tsvetkov.logext.services.LogCatSettingsService
 import java.awt.BorderLayout
@@ -43,16 +44,19 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private val allTags = mutableMapOf<String, TagInfo>()
     private val settings = LogCatSettingsService.getInstance(project)
+    private val globalSettings = LogCatGlobalSettingsService.getInstance()
     private val rawLogsHistory = mutableListOf<String>()
     private val pidToProcess = mutableMapOf<String, String>()
 
     private val listenerService = project.service<LogCatListenerService>()
 
     private var filterHeader: LogFilterHeader? = null
+    private var currentDevice: String? = null
 
     init {
         val header = LogFilterHeader(
             onDeviceChanged = { device ->
+                currentDevice = device
                 restartListening(device)
             },
             onProcessChanged = { process ->
@@ -73,20 +77,69 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         createToolbar()
         Disposer.register(this, consoleView)
 
+        // Мгновенное обновление списка устройств при старте
         val initialDevices = listenerService.getConnectedDevices()
         if (initialDevices.isNotEmpty()) {
+            val deviceToStart = initialDevices[0]
             header.updateDevices(initialDevices)
-            restartListening(initialDevices[0])
+            restartListening(deviceToStart)
+
+            // Сразу пытаемся получить процессы, не дожидаясь таймера
+            val adbProcesses = listenerService.getProcessList(deviceToStart)
+            if (adbProcesses.isNotEmpty()) {
+                adbProcesses.forEach { (pid, pkg) -> pidToProcess[pid] = pkg }
+                val savedProcess = settings.getState().lastSelectedProcess
+                header.updateProcesses(pidToProcess.values.distinct().sorted(), savedProcess)
+            }
         }
 
         Timer(5000) {
             val devices = listenerService.getConnectedDevices()
             header.updateDevices(devices)
             
-            if (header.getSelectedProcess() == "All Processes" || header.getSelectedProcess() == null) {
-                val savedProcess = settings.getState().lastSelectedProcess
-                if (savedProcess != null && pidToProcess.values.contains(savedProcess)) {
+            // Обновляем список процессов напрямую из ADB
+            val activeDevice = header.getSelectedDevice()
+            if (activeDevice != null && activeDevice != "Loading devices...") {
+                val adbProcesses = listenerService.getProcessList(activeDevice)
+                var processesChanged = false
+                val selectedPackage = header.getSelectedProcess()
+                var currentSelectedPidChanged = false
+                
+                // Полная синхронизация: удаляем те, которых больше нет, и добавляем новые
+                if (adbProcesses.isNotEmpty()) {
+                    // Удаляем устаревшие PID
+                    val currentPids = adbProcesses.keys
+                    val pidsToRemove = pidToProcess.keys.filter { it !in currentPids }
+                    if (pidsToRemove.isNotEmpty()) {
+                        pidsToRemove.forEach { pid ->
+                            if (pidToProcess[pid] == selectedPackage) {
+                                currentSelectedPidChanged = true
+                            }
+                            pidToProcess.remove(pid)
+                        }
+                        processesChanged = true
+                    }
+
+                    // Добавляем/обновляем новые
+                    adbProcesses.forEach { (pid, pkg) ->
+                        if (pidToProcess[pid] != pkg) {
+                            pidToProcess[pid] = pkg
+                            processesChanged = true
+                            if (pkg == selectedPackage) {
+                                currentSelectedPidChanged = true
+                            }
+                        }
+                    }
+                }
+
+                if (processesChanged || header.getSelectedProcess() == "All Processes" || header.getSelectedProcess() == null) {
+                    val savedProcess = settings.getState().lastSelectedProcess
                     header.updateProcesses(pidToProcess.values.distinct().sorted(), savedProcess)
+                    
+                    // Если PID текущего выбранного приложения изменился (рестарт), запускаем перефильтрацию
+                    if (currentSelectedPidChanged && selectedPackage != "All Processes") {
+                        reFilterHistory()
+                    }
                 }
             }
         }.start()
@@ -135,26 +188,46 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val levelChar = matchResult?.groupValues?.get(6)
         val tagName = matchResult?.groupValues?.get(7)?.trim()
 
+        // Парсинг регистрации процесса из системных логов
         val isProcessInfoLine = line.contains("perfColdLaunchBoost")
         val processMatch = Regex("perfColdLaunchBoost: (.*?), (\\d+)").find(line)
         processMatch?.let {
             val pkg = it.groupValues[1].trim()
             val detectedPid = it.groupValues[2].trim()
-            
-            if (settings.getState().clearLogOnStart && pkg == settings.getState().lastSelectedProcess) {
-                if (pidToProcess[detectedPid] != pkg) {
-                    ApplicationManager.getApplication().invokeLater {
+            val isTargetProcess = pkg == settings.getState().lastSelectedProcess
+            val isNewPid = pidToProcess[detectedPid] != pkg
+
+            if (isTargetProcess && isNewPid) {
+                ApplicationManager.getApplication().invokeLater {
+                    if (globalSettings.state.clearLogOnStart) {
                         synchronized(rawLogsHistory) {
                             rawLogsHistory.clear()
                             allTags.clear()
                             pidToProcess.clear()
                             consoleView.clear()
                         }
-                        pidToProcess[detectedPid] = pkg
-                        header.updateProcesses(pidToProcess.values.distinct().sorted(), pkg)
+                    }
+                    pidToProcess[detectedPid] = pkg
+                    header.updateProcesses(pidToProcess.values.distinct().sorted(), pkg)
+
+                    // Автоматическое открытие окна при старте приложения
+                    if (globalSettings.state.openOnStart) {
+                        // Увеличиваем задержку, чтобы гарантированно перебить стандартный Logcat, 
+                        // который открывается самой Android Studio при детекте нового процесса.
+                        Timer(1000) {
+                            ApplicationManager.getApplication().invokeLater {
+                                val toolWindow = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
+                                    .getToolWindow("TAO LogExt")
+                                if (toolWindow != null && !toolWindow.isVisible) {
+                                    toolWindow.show()
+                                } else {
+                                    toolWindow?.activate(null)
+                                }
+                            }
+                        }.apply { isRepeats = false }.start()
                     }
                 }
-            } else if (pidToProcess[detectedPid] != pkg) {
+            } else if (isNewPid) {
                 pidToProcess[detectedPid] = pkg
                 ApplicationManager.getApplication().invokeLater {
                     val preferred = settings.getState().lastSelectedProcess ?: pkg
@@ -173,7 +246,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             if (!isProcessInfoLine && !isAppLine) return
         }
 
-        if (tagName != null && settings.isTagIgnored(tagName)) return
+        if (tagName != null && globalSettings.isTagIgnored(tagName)) return
 
         synchronized(rawLogsHistory) {
             rawLogsHistory.add(line)
@@ -204,7 +277,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         date: String?, time: String?, millis: String?, pid: String?, tid: String?,
         levelChar: String?, tagName: String?, messagePart: String
     ): String {
-        val state = settings.getState()
+        val state = globalSettings.state
         val sb = StringBuilder()
         
         if (state.showDate && date != null) sb.append(date).append(" ")
@@ -233,7 +306,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     private fun processParsedMessage(line: String, tagName: String, levelChar: String, isAppTag: Boolean = false) {
-        if (settings.isTagIgnored(tagName)) return
+        if (globalSettings.isTagIgnored(tagName)) return
 
         val tagInfo = allTags.getOrPut(tagName) {
             TagInfo(tagName, isSelected = settings.isTagSelected(tagName), isApplicationTag = isAppTag)
@@ -248,7 +321,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     private fun printToConsole(formattedMessage: String, levelChar: String) {
-        val attrs = settings.getLevelAttributes(levelChar)
+        val attrs = globalSettings.getLevelAttributes(levelChar)
         val textAttributes = TextAttributes().apply {
             attrs.foregroundColor?.let { foregroundColor = Color.decode(it) }
             attrs.backgroundColor?.let { backgroundColor = Color.decode(it) }
@@ -275,7 +348,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     val levelChar = matchResult.groupValues[6]
                     val tagName = matchResult.groupValues[7].trim()
                     
-                    if (settings.isTagIgnored(tagName)) return@forEach
+                    if (globalSettings.isTagIgnored(tagName)) return@forEach
 
                     val selectedProcess = header.getSelectedProcess()
                     val targetPid = if (selectedProcess != null && selectedProcess != "All Processes") {
