@@ -28,6 +28,8 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
         var tagWidth: Int = 23
         var lastExportPath: String? = null
         var minimizeForAi: Boolean = false
+        var lastTagSearch: String = ""
+        var lastTagMatchCase: Boolean = false
     }
 
     data class LevelAttributes(
