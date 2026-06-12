@@ -24,6 +24,7 @@ import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.datatransfer.StringSelection
 import java.io.File
+import java.util.concurrent.ConcurrentLinkedQueue
 import javax.swing.JPanel
 import javax.swing.Timer
 
@@ -55,6 +56,17 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     
     private var lastMetadata: String? = null
 
+    // Буфер для накопления логов перед выводом в UI
+    private val logBuffer = ConcurrentLinkedQueue<LogItem>()
+    private val bufferTimer: Timer
+
+    data class LogItem(
+        val message: String,
+        val levelChar: String,
+        val tagName: String?,
+        val isAppTag: Boolean
+    )
+
     init {
         val header = LogFilterHeader(
             onDeviceChanged = { device ->
@@ -78,6 +90,11 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         add(consoleView.component, BorderLayout.CENTER)
         createToolbar()
         Disposer.register(this, consoleView)
+
+        // Таймер для периодической выгрузки буфера в UI (раз в 100 мс)
+        bufferTimer = Timer(100) {
+            flushBuffer()
+        }.apply { start() }
 
         // Мгновенное обновление списка устройств при старте
         val initialDevices = listenerService.getConnectedDevices()
@@ -164,6 +181,22 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }.apply { isRepeats = false }.start()
     }
 
+    private fun flushBuffer() {
+        if (logBuffer.isEmpty()) return
+        
+        ApplicationManager.getApplication().invokeLater {
+            var item = logBuffer.poll()
+            while (item != null) {
+                if (item.tagName != null) {
+                    processParsedMessage(item.message, item.tagName, item.levelChar, item.isAppTag)
+                } else {
+                    consoleView.print(item.message + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
+                }
+                item = logBuffer.poll()
+            }
+        }
+    }
+
     private fun showTagFilterDialog() {
         val tagsToShow = getFilteredTagsForCurrentProcess()
         val dialog = TagFilterDialog(project, tagsToShow)
@@ -180,6 +213,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             allTags.clear()
             pidToProcess.clear()
             lastMetadata = null
+            logBuffer.clear()
             ApplicationManager.getApplication().invokeLater {
                 consoleView.clear()
             }
@@ -225,6 +259,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                             allTags.clear()
                             pidToProcess.clear()
                             lastMetadata = null
+                            logBuffer.clear()
                             consoleView.clear()
                         }
                     }
@@ -276,24 +311,21 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             }
         }
 
-        ApplicationManager.getApplication().invokeLater {
-            if (matchResult != null && tagName != null && levelChar != null) {
-                if (header.isLevelSelected(levelChar)) {
-                    val isTagFromApp = isAppLine || (pid != null && tid != null && pid == tid)
-                    
-                    val messagePart = matchResult.groupValues.getOrNull(8) ?: ""
-                    val currentMetadata = "$date $time.$millis $pid $tid $levelChar $tagName"
-                    
-                    val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, messagePart, currentMetadata)
-                    processParsedMessage(formattedLine, tagName, levelChar, isTagFromApp)
-                    
-                    lastMetadata = currentMetadata
-                }
-            } else {
-                val selectedTags = settings.getState().selectedTags
-                if (selectedTags == null) {
-                    consoleView.print(line + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
-                }
+        // Вместо немедленного invokeLater, добавляем в буфер
+        if (matchResult != null && tagName != null && levelChar != null) {
+            if (header.isLevelSelected(levelChar)) {
+                val isTagFromApp = isAppLine || (pid != null && tid != null && pid == tid)
+                val messagePart = matchResult.groupValues.getOrNull(8) ?: ""
+                val currentMetadata = "$date $time.$millis $pid $tid $levelChar $tagName"
+                val formattedLine = formatLineBySettings(date, time, millis, pid, tid, levelChar, tagName, messagePart, currentMetadata)
+                
+                logBuffer.add(LogItem(formattedLine, levelChar, tagName, isTagFromApp))
+                lastMetadata = currentMetadata
+            }
+        } else {
+            val selectedTags = settings.getState().selectedTags
+            if (selectedTags == null) {
+                logBuffer.add(LogItem(line, "V", null, false))
             }
         }
     }
@@ -388,6 +420,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         ApplicationManager.getApplication().invokeLater {
             consoleView.clear()
             lastMetadata = null
+            logBuffer.clear()
             val historyCopy = synchronized(rawLogsHistory) { rawLogsHistory.toList() }
             historyCopy.forEach { message ->
                 val threadtimeRegex = Regex("""(\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d{3})\s+(\d+)\s+(\d+)\s+([VDIWEA])\s+(.*?):\s?(.*)""")
@@ -543,6 +576,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     override fun dispose() {
+        bufferTimer.stop()
     }
 
     companion object {
