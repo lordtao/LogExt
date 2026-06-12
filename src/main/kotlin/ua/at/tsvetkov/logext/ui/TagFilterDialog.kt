@@ -54,6 +54,10 @@ class TagFilterDialog(
     }
 
     private val tagComponents = mutableMapOf<String, JComponent>()
+    
+    // Ссылки на скролл-панели для сохранения позиции
+    private var tagsScrollPane: JBScrollPane? = null
+    private var ignoredScrollPane: JBScrollPane? = null
 
     init {
         title = "Filter Tags"
@@ -150,6 +154,10 @@ class TagFilterDialog(
     }
 
     private fun updatePanels() {
+        // Сохраняем текущую позицию прокрутки
+        val tagsScrollValue = tagsScrollPane?.verticalScrollBar?.value ?: 0
+        val ignoredScrollValue = ignoredScrollPane?.verticalScrollBar?.value ?: 0
+
         centerPanel.removeAll()
         tagComponents.clear()
 
@@ -158,8 +166,17 @@ class TagFilterDialog(
 
         val ignoredTagsNames = ignoredTagsSet.toList().sorted()
 
-        centerPanel.add(createTagGroupPanel("Tags", activeTags, true))
-        centerPanel.add(createIgnoredGroupPanel("Ignored Tags", ignoredTagsNames))
+        val tagsPanel = createTagGroupPanel("Tags", activeTags, true)
+        val ignoredPanel = createIgnoredGroupPanel("Ignored Tags", ignoredTagsNames)
+        
+        centerPanel.add(tagsPanel)
+        centerPanel.add(ignoredPanel)
+
+        // Восстанавливаем позицию прокрутки после перестроения
+        SwingUtilities.invokeLater {
+            tagsScrollPane?.verticalScrollBar?.value = tagsScrollValue
+            ignoredScrollPane?.verticalScrollBar?.value = ignoredScrollValue
+        }
 
         applyFilter()
     }
@@ -214,7 +231,9 @@ class TagFilterDialog(
             listPanel.add(row)
         }
 
-        panel.add(JBScrollPane(listPanel), BorderLayout.CENTER)
+        val scroll = JBScrollPane(listPanel)
+        tagsScrollPane = scroll
+        panel.add(scroll, BorderLayout.CENTER)
 
         val footer = JPanel()
         footer.layout = BoxLayout(footer, BoxLayout.Y_AXIS)
@@ -296,7 +315,9 @@ class TagFilterDialog(
             listPanel.add(row)
         }
 
-        panel.add(JBScrollPane(listPanel), BorderLayout.CENTER)
+        val scroll = JBScrollPane(listPanel)
+        ignoredScrollPane = scroll
+        panel.add(scroll, BorderLayout.CENTER)
 
         val returnAllBtn = JButton("Return all")
         returnAllBtn.addActionListener {
