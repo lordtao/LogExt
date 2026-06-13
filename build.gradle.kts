@@ -13,7 +13,7 @@ val gitCommitNumber = providers.exec {
 }.standardOutput.asText.get().trim().toInt() - backNumber
 
 group = "ua.at.tsvetkov"
-version = "1.0.$gitCommitNumber"
+version = "1.0.1"
 
 val localIdePath: String = System.getProperty("idea.home.path") ?: "C:/Program Files/Android/Android Studio"
 
