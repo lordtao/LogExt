@@ -182,8 +182,8 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 group.addSeparator()
                 val standardGroup = ActionManager.getInstance().getAction(ActionPlaces.EDITOR_POPUP) as? ActionGroup
                 if (standardGroup != null) {
-                    val children = standardGroup.getChildren(null)
-                    group.addAll(*children)
+                    group.addSeparator()
+                    group.addAll(standardGroup)
                 }
                 val popupMenu = ActionManager.getInstance().createActionPopupMenu("LogCatPopup", group)
                 popupMenu.component.show(e.component, e.x, e.y)
