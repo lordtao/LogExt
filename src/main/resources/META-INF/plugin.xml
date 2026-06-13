@@ -13,7 +13,7 @@
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
     <description><![CDATA[
-        <b>TAO LogExt</b> is a highly customizable Android LogCat viewer plugin for Android Studio. It provides flexible filtering, performance optimizations, and AI integration for a more controlled logging experience.
+        <b>TAO LogExt</b> is a highly customizable Android LogCat viewer plugin for Android Studio. It provides flexible filtering, performance optimizations.<br>If your logs are overloaded with unnecessary details, then this plugin is exactly what you need.
     ]]></description>
 
     <!-- Product and plugin compatibility requirements.

@@ -1,6 +1,7 @@
 # TAO LogExt - Android LogCat Viewer
 
-**TAO LogExt** is a highly customizable Android LogCat viewer plugin for Android Studio. It provides flexible filtering, performance optimizations, and AI integration for a more controlled logging experience.
+**TAO LogExt** is a highly customizable Android LogCat viewer plugin for Android Studio. It provides flexible filtering, performance optimizations.
+<br>If your logs are overloaded with unnecessary details, then this plugin is exactly what you need.
 
 ![Main View](media/img_1.png)
 
