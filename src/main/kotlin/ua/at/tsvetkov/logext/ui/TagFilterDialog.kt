@@ -19,6 +19,9 @@ import java.awt.*
 import javax.swing.*
 import javax.swing.event.DocumentEvent
 
+/**
+ * Диалоговое окно для фильтрации тегов.
+ */
 class TagFilterDialog(
     project: Project,
     private val allTags: List<TagInfo>

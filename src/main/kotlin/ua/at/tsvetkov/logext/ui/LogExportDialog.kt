@@ -20,7 +20,7 @@ class LogExportDialog(private val project: Project) : DialogWrapper(project) {
 
     private val globalSettings = LogCatGlobalSettingsService.getInstance()
     private val pathField = TextFieldWithBrowseButton()
-    private val minimizeCheck = JBCheckBox("Minimize for AI (collapse multiple spaces)", globalSettings.state.minimizeForAi)
+    private val minimizeCheck = JBCheckBox("Minimize for AI", globalSettings.state.minimizeForAi)
 
     init {
         title = "Export Logs"

@@ -23,6 +23,7 @@ class LogCatGlobalSettingsService : PersistentStateComponent<LogCatGlobalSetting
         var showPid: Boolean = true
         var showTid: Boolean = true
         var tagWidth: Int = 23
+        var maxHistorySize: Int = 100000
         
         var clearLogOnStart: Boolean = true
         var openOnStart: Boolean = true

@@ -34,6 +34,7 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
     private val showTidCheck = JBCheckBox("Thread ID", globalSettings.state.showTid)
     private val showDuplicateTagsCheck = JBCheckBox("Show duplicate tags/metadata", globalSettings.state.showDuplicateTags)
     private val tagWidthSpinner = JSpinner(SpinnerNumberModel(globalSettings.state.tagWidth, 0, 100, 1))
+    private val maxHistorySizeSpinner = JSpinner(SpinnerNumberModel(globalSettings.state.maxHistorySize, 1000, 1000000, 1000))
     
     private val aiPromptArea = JBTextArea(3, 50).apply {
         text = globalSettings.state.aiPrompt
@@ -71,6 +72,11 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
         formBuilder.addComponent(createColorSettingsPanel())
 
         formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Log Line View")))
+        
+        val historyPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 0))
+        historyPanel.add(JBLabel("Max history lines:"))
+        historyPanel.add(maxHistorySizeSpinner)
+        formBuilder.addComponent(historyPanel)
         
         val checkboxesPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 0))
         checkboxesPanel.add(showDateCheck)
@@ -215,6 +221,7 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
         state.showPid = showPidCheck.isSelected
         state.showTid = showTidCheck.isSelected
         state.tagWidth = tagWidthSpinner.value as Int
+        state.maxHistorySize = maxHistorySizeSpinner.value as Int
         state.showDuplicateTags = showDuplicateTagsCheck.isSelected
         state.aiPrompt = aiPromptArea.text
 

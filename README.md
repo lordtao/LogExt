@@ -25,7 +25,7 @@ Access essential actions directly from the log stream via the context menu.
 *   **Explain with AI**: Send selected log entries directly to the **Gemini AI Agent** (Studio Bot) inside Android Studio for analysis.
 *   **Copy Message**: Copy only the message text, automatically removing metadata such as dates, PIDs, and tags.
 *   **Search with Google**: Perform a web search for error codes or exception messages in one click.
-*   **Log Export (AI Optimized)**: Save filtered logs to a file. Includes an option to minimize log data by removing unnecessary whitespaces, reducing token consumption when using external AI models for analysis.
+*   **Log Export (AI Optimized)**: Save filtered logs to a file. Includes an option to minimize log data, reducing token consumption when using external AI models for analysis.
 *   **Quick Filter/Ignore**: Hide a tag from the current project or add it to the global blacklist using the right-click menu.
 
 ![Log Export](media/img_4.png)
@@ -38,6 +38,7 @@ Access essential actions directly from the log stream via the context menu.
 ### 4. Visibility and Performance
 *   **Custom Coloring**: Foreground and background colors can be set for each log level (Verbose, Debug, Info, Warning, Error, Assert).
 *   **High-Speed Buffering**: Uses a thread-safe buffer to batch-update the UI every 100ms, maintaining IDE responsiveness during heavy logging.
+*   **Customizable History**: Set the maximum number of log lines to keep in memory (default is 100,000 lines).
 *   **Metadata Cleanup**: Option to replace duplicate metadata (Date, Time, PID, Tag) in consecutive lines with whitespace for better readability.
 
 ---
