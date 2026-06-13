@@ -19,9 +19,6 @@ import java.awt.*
 import javax.swing.*
 import javax.swing.event.DocumentEvent
 
-/**
- * Диалоговое окно для фильтрации тегов с двумя группами: Tags и Ignored.
- */
 class TagFilterDialog(
     project: Project,
     private val allTags: List<TagInfo>
@@ -43,6 +40,8 @@ class TagFilterDialog(
     
     private var tagsScrollPane: JBScrollPane? = null
     private var ignoredScrollPane: JBScrollPane? = null
+    
+    private var showOnlyInactive = false
 
     init {
         title = "Filter Tags"
@@ -71,8 +70,8 @@ class TagFilterDialog(
         }
         searchInputPanel.add(scrollPane, BorderLayout.CENTER)
 
-        // Используем ActionToolbar для кнопок поиска, чтобы корректно отображать состояние Match Case
         val actionGroup = DefaultActionGroup()
+        val toolbar = ActionManager.getInstance().createActionToolbar("TagFilterSearch", actionGroup, true)
         
         actionGroup.add(object : AnAction("Clear Search", "Clear search query", AllIcons.Actions.Close) {
             override fun actionPerformed(e: AnActionEvent) {
@@ -85,11 +84,11 @@ class TagFilterDialog(
             override fun setSelected(e: AnActionEvent, state: Boolean) {
                 settings.getState().lastTagMatchCase = state
                 applyFilter()
+                toolbar.updateActionsImmediately()
             }
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
         })
 
-        val toolbar = ActionManager.getInstance().createActionToolbar("TagFilterSearch", actionGroup, true)
         toolbar.targetComponent = searchArea
         searchInputPanel.add(toolbar.component, BorderLayout.EAST)
 
@@ -128,18 +127,23 @@ class TagFilterDialog(
         val searchTerms = query.split(Regex("[\\s\\n\\r]+")).filter { it.isNotEmpty() }
 
         for ((tagName, component) in tagComponents) {
-            val visible = if (searchTerms.isEmpty()) {
+            val tagInfo = workingTags.find { it.name == tagName }
+            
+            val matchesQuery = if (searchTerms.isEmpty()) {
                 true
             } else {
                 searchTerms.any { term ->
-                    if (matchCase) {
-                        tagName.contains(term)
-                    } else {
-                        tagName.lowercase().contains(term.lowercase())
-                    }
+                    if (matchCase) tagName.contains(term) else tagName.lowercase().contains(term.lowercase())
                 }
             }
-            component.isVisible = visible
+            
+            val matchesInactiveFilter = if (showOnlyInactive) {
+                tagInfo?.isSelected == false
+            } else {
+                true
+            }
+            
+            component.isVisible = matchesQuery && matchesInactiveFilter
         }
 
         centerPanel.revalidate()
@@ -178,6 +182,7 @@ class TagFilterDialog(
         showIgnoreButton: Boolean
     ): JPanel {
         val panel = JPanel(BorderLayout())
+        
         panel.add(JBLabel(title).apply {
             font = font.deriveFont(Font.BOLD)
             border = JBUI.Borders.emptyBottom(5)
@@ -252,6 +257,18 @@ class TagFilterDialog(
         mainButtons.add(clearAll)
         footer.add(mainButtons)
 
+        val bottomButtonsPanel = JPanel(BorderLayout())
+        
+        val showInactiveBtn = JToggleButton("Show inactive")
+        showInactiveBtn.isSelected = showOnlyInactive
+        if (showOnlyInactive) showInactiveBtn.text = "Show all"
+        showInactiveBtn.addActionListener {
+            showOnlyInactive = showInactiveBtn.isSelected
+            showInactiveBtn.text = if (showOnlyInactive) "Show all" else "Show inactive"
+            applyFilter()
+        }
+        bottomButtonsPanel.add(showInactiveBtn, BorderLayout.WEST)
+
         val ignoreAllBtn = JButton("Ignore all")
         ignoreAllBtn.addActionListener {
             groupTags.forEach {
@@ -262,9 +279,9 @@ class TagFilterDialog(
             }
             updatePanels()
         }
-        val btnRow = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
-        btnRow.add(ignoreAllBtn)
-        footer.add(btnRow)
+        bottomButtonsPanel.add(ignoreAllBtn, BorderLayout.EAST)
+        
+        footer.add(bottomButtonsPanel)
 
         panel.add(footer, BorderLayout.SOUTH)
         return panel
@@ -322,11 +339,8 @@ class TagFilterDialog(
 
     override fun doOKAction() {
         globalSettings.state.ignoredTags = ignoredTagsSet
-        
         val state = settings.getState()
         state.lastTagSearch = searchArea.text
-        // lastTagMatchCase сохраняется сразу в ToggleAction
-
         super.doOKAction()
     }
 }

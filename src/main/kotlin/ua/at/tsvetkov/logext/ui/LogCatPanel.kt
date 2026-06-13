@@ -118,6 +118,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         createToolbar()
         Disposer.register(this, consoleView)
 
+        // Инициализация иконки фильтра при старте
+        updateTagFilterIndicator()
+
         bufferTimer = Timer(100) {
             flushBuffer()
         }.apply { start() }
@@ -178,6 +181,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     if (currentSelectedPidChanged && selectedPackage != "All Processes") {
                         reFilterHistory()
                     }
+                    
+                    // Обновляем индикатор фильтра, так как могли появиться новые теги
+                    updateTagFilterIndicator()
                 }
             }
         }.start()
@@ -195,6 +201,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     val savedProcess = settings.getState().lastSelectedProcess
                     header.updateProcesses(pidToProcess.values.distinct().sorted(), savedProcess)
                 }
+                updateTagFilterIndicator()
             }
         }.apply { isRepeats = false }.start()
     }
@@ -206,13 +213,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val currentLineText = getLineAtCaret(editor) ?: return
         
         val tagName = extractTagFromFormattedLine(currentLineText)
-
-        group.add(object : AnAction("Clear Log", "Clear console and history", AllIcons.Actions.GC) {
-            override fun actionPerformed(e: AnActionEvent) {
-                clearAllLogs()
-            }
-        })
-        group.addSeparator()
 
         if (selectedText != null) {
             group.add(object : AnAction("Copy Selection", "Copy selected text to clipboard", AllIcons.Actions.Copy) {
@@ -267,6 +267,13 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 }
             })
         }
+
+        group.addSeparator()
+        group.add(object : AnAction("Clear Log", "Clear console and history", AllIcons.Actions.GC) {
+            override fun actionPerformed(e: AnActionEvent) {
+                clearAllLogs()
+            }
+        })
     }
 
     private fun tryOpenInInternalAi(query: String): Boolean {
@@ -540,11 +547,17 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private fun processParsedMessage(line: String, tagName: String, levelChar: String, isAppTag: Boolean = false) {
         if (globalSettings.isTagIgnored(tagName)) return
 
+        var isNewTag = false
         val tagInfo = allTags.getOrPut(tagName) {
+            isNewTag = true
             TagInfo(tagName, isSelected = settings.isTagSelected(tagName), isApplicationTag = isAppTag)
         }
         tagInfo.isPresentInCurrentLog = true
         if (isAppTag) tagInfo.isApplicationTag = true
+
+        if (isNewTag) {
+            updateTagFilterIndicator()
+        }
 
         val selectedTags = settings.getState().selectedTags
         if (selectedTags == null || selectedTags.contains(tagName)) {

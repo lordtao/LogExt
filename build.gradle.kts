@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.7.1"
 }
 
-val backNumber = 5
+val backNumber = 13
 
 val gitCommitNumber = providers.exec {
     commandLine("git", "rev-list", "--count", "HEAD")
