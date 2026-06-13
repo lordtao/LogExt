@@ -71,7 +71,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val message: String,
         val levelChar: String,
         val tagName: String?,
-        val isAppTag: Boolean
+        val isAppTag: Boolean,
     )
 
     init {
@@ -81,11 +81,11 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 restartListening(device)
             },
             onProcessChanged = { process ->
-                settings.getState().lastSelectedProcess = process
+                settings.state.lastSelectedProcess = process
                 reFilterHistory()
             },
             onLevelsChanged = { reFilterHistory() },
-            onTagFilterClicked = { showTagFilterDialog() }
+            onTagFilterClicked = { showTagFilterDialog() },
         )
         filterHeader = header
 
@@ -111,7 +111,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             val adbProcesses = listenerService.getProcessList(deviceToStart)
             if (adbProcesses.isNotEmpty()) {
                 adbProcesses.forEach { (pid, pkg) -> processManager.updateProcess(pid, pkg) }
-                filterHeader?.updateProcesses(processManager.getAllPackages(), settings.getState().lastSelectedProcess)
+                filterHeader?.updateProcesses(processManager.getAllPackages(), settings.state.lastSelectedProcess)
             }
         }
     }
@@ -132,7 +132,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     val currentPids = adbProcesses.keys
                     val pidsToRemove = processManager.getPids().filter { it !in currentPids }
                     pidsToRemove.forEach { pid ->
-                        if (processManager.getPackageByPidChecked(pid, selectedPackage ?: "")) currentSelectedPidChanged = true
+                        if (processManager.getPackageByPidChecked(pid, selectedPackage ?: "")) {
+                            currentSelectedPidChanged = true
+                        }
                         processManager.removeProcess(pid)
                         processesChanged = true
                     }
@@ -146,7 +148,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 }
 
                 if (processesChanged || header.getSelectedProcess() == "All Processes" || header.getSelectedProcess() == null) {
-                    header.updateProcesses(processManager.getAllPackages(), settings.getState().lastSelectedProcess)
+                    header.updateProcesses(processManager.getAllPackages(), settings.state.lastSelectedProcess)
                     if (currentSelectedPidChanged && selectedPackage != "All Processes") reFilterHistory()
                     updateTagFilterIndicator()
                 }
@@ -163,7 +165,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 val adbProcesses = listenerService.getProcessList(activeDevice)
                 if (adbProcesses.isNotEmpty()) {
                     adbProcesses.forEach { (pid, pkg) -> processManager.updateProcess(pid, pkg) }
-                    header.updateProcesses(processManager.getAllPackages(), settings.getState().lastSelectedProcess)
+                    header.updateProcesses(processManager.getAllPackages(), settings.state.lastSelectedProcess)
                 }
                 updateTagFilterIndicator()
             }
@@ -179,7 +181,10 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 addCustomContextActions(group)
                 group.addSeparator()
                 val standardGroup = ActionManager.getInstance().getAction(ActionPlaces.EDITOR_POPUP) as? ActionGroup
-                if (standardGroup != null) group.addAll(standardGroup.getChildren(null).toList())
+                if (standardGroup != null) {
+                    val children = standardGroup.getChildren(null)
+                    group.addAll(*children)
+                }
                 val popupMenu = ActionManager.getInstance().createActionPopupMenu("LogCatPopup", group)
                 popupMenu.component.show(e.component, e.x, e.y)
             }
@@ -222,7 +227,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             group.addSeparator()
             group.add(object : AnAction("Filter Tag '$tagName'", null, AllIcons.General.Filter) {
                 override fun actionPerformed(e: AnActionEvent) {
-                    settings.setTagSelected(tagName, false, allTags.keys)
+                    settings.setTagSelected(tagName, selected = false, allKnownTags = allTags.keys)
                     allTags[tagName]?.isSelected = false
                     updateTagFilterIndicator()
                     reFilterHistory()
@@ -231,7 +236,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
             group.add(object : AnAction("Always Ignore Tag '$tagName'", null, AllIcons.Actions.DeleteTag) {
                 override fun actionPerformed(e: AnActionEvent) {
-                    globalSettings.setTagIgnored(tagName, true)
+                    globalSettings.setTagIgnored(tagName, ignored = true)
                     allTags[tagName]?.isSelected = false
                     updateTagFilterIndicator()
                     reFilterHistory()
@@ -255,7 +260,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             val stageChatQueryMethod = api.javaClass.getMethod("stageChatQuery", Project::class.java, String::class.java, requestSourceClass)
             stageChatQueryMethod.invoke(api, project, query, logcatSource)
             true
-        } catch (e: Exception) { false }
+        } catch (_: Exception) { false }
     }
 
     private fun getLineAtCaret(editor: Editor): String? {
@@ -295,7 +300,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private fun showTagFilterDialog() {
         val tagsToShow = getFilteredTagsForCurrentProcess()
         if (TagFilterDialog(project, tagsToShow).showAndGet()) {
-            settings.setSelectedTags(tagsToShow.filter { it.isSelected }.map { it.name }.toSet())
+            settings.setSelectedTags(tagsToShow.asSequence().filter { it.isSelected }.map { it.name }.toSet())
             updateTagFilterIndicator()
             reFilterHistory()
         }
@@ -329,7 +334,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val processInfo = parser.detectProcess(line)
 
         processInfo?.let {
-            val isTargetProcess = it.packageName == settings.getState().lastSelectedProcess
+            val isTargetProcess = it.packageName == settings.state.lastSelectedProcess
             val isNewPid = processManager.updateProcess(it.pid, it.packageName)
 
             if (isTargetProcess && isNewPid) {
@@ -339,7 +344,8 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     if (globalSettings.state.openOnStart) {
                         Timer(1000) {
                             ApplicationManager.getApplication().invokeLater {
-                                val tw = com.intellij.openapi.wm.ToolWindowManager.getInstance(project).getToolWindow("TAO LogExt")
+                                val toolWindowManager = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
+                                val tw = toolWindowManager.getToolWindow("TAO LogExt")
                                 if (tw != null && !tw.isVisible) tw.show() else tw?.activate(null)
                             }
                         }.apply { isRepeats = false }.start()
@@ -347,7 +353,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 }
             } else if (isNewPid) {
                 ApplicationManager.getApplication().invokeLater {
-                    header.updateProcesses(processManager.getAllPackages(), settings.getState().lastSelectedProcess ?: it.packageName)
+                    header.updateProcesses(processManager.getAllPackages(), settings.state.lastSelectedProcess ?: it.packageName)
                 }
             }
         }
@@ -373,7 +379,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 logBuffer.add(LogItem(formattedLine, parsed.level, parsed.tag, isTagFromApp))
                 lastMetadata = parsed.metadata
             }
-        } else if (settings.getState().selectedTags == null) {
+        } else if (settings.state.selectedTags == null) {
             logBuffer.add(LogItem(line, "V", null, false))
         }
     }
@@ -390,7 +396,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         if (isAppTag) tagInfo.isApplicationTag = true
         if (isNewTag) updateTagFilterIndicator()
 
-        if (settings.getState().selectedTags?.contains(tagName) != false) {
+        if (settings.state.selectedTags?.contains(tagName) != false) {
             val attrs = globalSettings.getLevelAttributes(levelChar)
             val textAttributes = TextAttributes().apply {
                 attrs.foregroundColor?.let { foregroundColor = Color.decode(it) }
@@ -412,17 +418,19 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 if (parsed != null) {
                     if (globalSettings.isTagIgnored(parsed.tag)) return@forEach
                     val selectedProcess = header.getSelectedProcess()
-                    val targetPid = if (selectedProcess != null && selectedProcess != "All Processes") processManager.findPidByPackage(selectedProcess) else null
+                    val targetPid = if (selectedProcess != null && selectedProcess != "All Processes") {
+                        processManager.findPidByPackage(selectedProcess)
+                    } else null
                     if (targetPid != null && parsed.pid != targetPid) return@forEach
                     
                     if (header.isLevelSelected(parsed.level)) {
-                        val isTagFromApp = (targetPid != null && parsed.pid == targetPid) || (parsed.pid == parsed.tid)
+                        val isTagFromApp = (targetPid != null) || (parsed.pid == parsed.tid)
                         val formattedLine = formatter.format(parsed, globalSettings.state, lastMetadata == parsed.metadata)
                         processParsedMessage(formattedLine, parsed.tag, parsed.level, isTagFromApp)
                         lastMetadata = parsed.metadata
                     }
                 } else if (header.getSelectedProcess() == null || header.getSelectedProcess() == "All Processes") {
-                    if (settings.getState().selectedTags == null) consoleView.print(message + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
+                    if (settings.state.selectedTags == null) consoleView.print(message + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
                 }
             }
         }
@@ -432,7 +440,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val selectedProcess = filterHeader?.getSelectedProcess()
         val currentProcessTags = mutableSetOf<String>()
         val historyCopy = synchronized(rawLogsHistory) { rawLogsHistory.toList() }
-        val targetPid = if (selectedProcess != null && selectedProcess != "All Processes") processManager.findPidByPackage(selectedProcess) else null
+        val targetPid = if (selectedProcess != null && selectedProcess != "All Processes") {
+            processManager.findPidByPackage(selectedProcess)
+        } else null
 
         historyCopy.forEach { message ->
             val parsed = parser.parse(message)
@@ -490,7 +500,4 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     override fun dispose() { bufferTimer.stop() }
-
-    companion object {
-    }
 }

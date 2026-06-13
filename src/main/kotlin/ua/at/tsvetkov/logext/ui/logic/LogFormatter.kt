@@ -10,7 +10,7 @@ class LogFormatter {
     fun format(
         parsed: LogParser.ParsedLine,
         state: LogCatGlobalSettingsService.State,
-        isDuplicate: Boolean
+        isDuplicate: Boolean,
     ): String {
         if (!state.showDuplicateTags && isDuplicate) {
             val sb = StringBuilder()

@@ -17,8 +17,6 @@ class ProcessManager {
         return pidToProcess.remove(pid) != null
     }
 
-    fun getPackageByPid(pid: String): String? = pidToProcess[pid]
-
     fun getPackageByPidChecked(pid: String, expectedPackage: String): Boolean {
         return pidToProcess[pid] == expectedPackage
     }
@@ -27,7 +25,7 @@ class ProcessManager {
         return pidToProcess.entries.find { it.value == pkg }?.key
     }
 
-    fun getAllPackages(): List<String> = pidToProcess.values.distinct().sorted()
+    fun getAllPackages(): List<String> = pidToProcess.values.asSequence().distinct().sorted().toList()
 
     fun clear() {
         pidToProcess.clear()

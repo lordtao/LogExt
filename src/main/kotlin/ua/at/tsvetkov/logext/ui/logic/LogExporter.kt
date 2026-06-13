@@ -1,7 +1,7 @@
 package ua.at.tsvetkov.logext.ui.logic
 
-import com.intellij.openapi.util.io.FileUtil
 import java.io.File
+import java.nio.charset.StandardCharsets
 
 /**
  * Класс для экспорта логов в файл с оптимизацией для ИИ.
@@ -33,6 +33,6 @@ class LogExporter(private val parser: LogParser) {
                 prevMetadata = null
             }
         }
-        FileUtil.writeToFile(file, sb.toString())
+        file.writeText(sb.toString(), StandardCharsets.UTF_8)
     }
 }

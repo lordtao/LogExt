@@ -17,12 +17,12 @@ class LogParser {
         val level: String,
         val tag: String,
         val message: String,
-        val metadata: String
+        val metadata: String,
     )
 
     data class ProcessInfo(
         val packageName: String,
-        val pid: String
+        val pid: String,
     )
 
     fun parse(line: String): ParsedLine? {
