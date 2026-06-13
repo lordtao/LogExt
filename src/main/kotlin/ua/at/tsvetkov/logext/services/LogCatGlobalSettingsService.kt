@@ -30,6 +30,8 @@ class LogCatGlobalSettingsService : PersistentStateComponent<LogCatGlobalSetting
         var lastExportPath: String? = null
         var minimizeForAi: Boolean = false
         var showDuplicateTags: Boolean = false
+        var aiPrompt: String = "Explain the following Android log entry and provide possible solutions. " +
+                "Answer in Russian language."
     }
 
     data class LevelAttributes(

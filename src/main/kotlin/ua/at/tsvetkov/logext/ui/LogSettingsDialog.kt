@@ -3,9 +3,12 @@ package ua.at.tsvetkov.logext.ui
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.ColorPanel
+import com.intellij.ui.JBColor
 import com.intellij.ui.TitledSeparator
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBTextArea
+import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
 import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
@@ -34,6 +37,13 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
     private val showDuplicateTagsCheck = JBCheckBox("Show duplicate tags/metadata", globalSettings.state.showDuplicateTags)
     private val tagWidthSpinner = JSpinner(SpinnerNumberModel(globalSettings.state.tagWidth, 0, 100, 1))
     
+    // AI Settings
+    private val aiPromptArea = JBTextArea(3, 50).apply {
+        text = globalSettings.state.aiPrompt
+        lineWrap = true
+        wrapStyleWord = true
+    }
+
     private val formatPreviewLabel = JBLabel().apply {
         font = Font(Font.MONOSPACED, Font.PLAIN, 12)
         border = JBUI.Borders.compound(
@@ -86,7 +96,15 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
 
         formBuilder.addLabeledComponent("Preview:", formatPreviewLabel)
 
-        // 3. Настройки старта
+        // 3. Настройки ИИ
+        formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("AI Explainer Settings")))
+        formBuilder.addLabeledComponent("AI Prompt:", JBScrollPane(aiPromptArea))
+        formBuilder.addComponent(JBLabel("Use this prompt when sending logs to AI for explanation.").apply {
+            font = JBUI.Fonts.smallFont()
+            foreground = JBColor.GRAY
+        })
+
+        // 4. Настройки старта
         formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Startup Settings")))
         formBuilder.addComponent(clearLogOnStartCheck)
         formBuilder.addComponent(openOnStartCheck)
@@ -185,7 +203,7 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
             else tag.padEnd(width)
         } else tag
         
-        sb.append("$formattedTag: Cancelling")
+        sb.append("$formattedTag  Cancelling")
         
         formatPreviewLabel.text = sb.toString()
     }
@@ -205,6 +223,7 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
         state.showTid = showTidCheck.isSelected
         state.tagWidth = tagWidthSpinner.value as Int
         state.showDuplicateTags = showDuplicateTagsCheck.isSelected
+        state.aiPrompt = aiPromptArea.text
 
         super.doOKAction()
     }

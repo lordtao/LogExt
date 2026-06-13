@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <defs>
+        <!-- Радиальный градиент для создания мягкого светящегося ореола -->
+        <radialGradient id="lamp-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="30%" stop-color="#FFEA00" stop-opacity="1" />
+            <stop offset="70%" stop-color="#FF9F00" stop-opacity="0.45" />
+            <stop offset="100%" stop-color="#FF9F00" stop-opacity="0" />
+        </radialGradient>
+    </defs>
+
+    <!-- Мягкий световой ореол (свечение) вокруг лампочки -->
+    <circle cx="6.5" cy="6.5" r="6" fill="url(#lamp-glow)" />
+
+    <!-- Яркое желтое ядро включенной лампочки -->
+    <circle cx="6.5" cy="6.5" r="3.5" fill="#FFFF00" stroke="#FF9F00" stroke-width="0.5" />
+</svg>

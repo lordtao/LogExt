@@ -4,17 +4,19 @@ import com.intellij.execution.impl.ConsoleViewImpl
 import com.intellij.execution.ui.ConsoleView
 import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.icons.AllIcons
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.util.io.FileUtil
+import com.intellij.openapi.util.io.FileUtilRt
 import com.intellij.openapi.vfs.VfsUtil
 import ua.at.tsvetkov.logext.models.TagInfo
 import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
@@ -24,13 +26,11 @@ import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.datatransfer.StringSelection
 import java.io.File
+import java.net.URLEncoder
 import java.util.concurrent.ConcurrentLinkedQueue
 import javax.swing.JPanel
 import javax.swing.Timer
 
-/**
- * Основная панель отображения логов.
- */
 class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Disposable {
 
     private val consoleView: ConsoleView = object : ConsoleViewImpl(project, true) {
@@ -40,7 +40,34 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             return compositeFilter
         }
     }.apply {
-        (this as ConsoleViewImpl).clearMessageFilters()
+        val console = this as ConsoleViewImpl
+        console.clearMessageFilters()
+        
+        ApplicationManager.getApplication().invokeLater {
+            val editor = console.editor
+            editor?.contentComponent?.addMouseListener(object : java.awt.event.MouseAdapter() {
+                override fun mousePressed(e: java.awt.event.MouseEvent) {
+                    if (e.isPopupTrigger) showPopupMenu(e)
+                }
+                override fun mouseReleased(e: java.awt.event.MouseEvent) {
+                    if (e.isPopupTrigger) showPopupMenu(e)
+                }
+                private fun showPopupMenu(e: java.awt.event.MouseEvent) {
+                    val group = DefaultActionGroup()
+                    addCustomContextActions(group)
+                    
+                    group.addSeparator()
+                    val actionManager = ActionManager.getInstance()
+                    val standardGroup = actionManager.getAction(ActionPlaces.EDITOR_POPUP) as? ActionGroup
+                    if (standardGroup != null) {
+                        group.addAll(standardGroup.getChildren(null).toList())
+                    }
+
+                    val popupMenu = actionManager.createActionPopupMenu("LogCatPopup", group)
+                    popupMenu.component.show(e.component, e.x, e.y)
+                }
+            })
+        }
     }
 
     private val allTags = mutableMapOf<String, TagInfo>()
@@ -55,8 +82,8 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private var currentDevice: String? = null
     
     private var lastMetadata: String? = null
+    private var autoScrollToEnd = true
 
-    // Буфер для накопления логов перед выводом в UI
     private val logBuffer = ConcurrentLinkedQueue<LogItem>()
     private val bufferTimer: Timer
 
@@ -91,19 +118,16 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         createToolbar()
         Disposer.register(this, consoleView)
 
-        // Таймер для периодической выгрузки буфера в UI (раз в 100 мс)
         bufferTimer = Timer(100) {
             flushBuffer()
         }.apply { start() }
 
-        // Мгновенное обновление списка устройств при старте
         val initialDevices = listenerService.getConnectedDevices()
         if (initialDevices.isNotEmpty()) {
             val deviceToStart = initialDevices[0]
             header.updateDevices(initialDevices)
             restartListening(deviceToStart)
 
-            // Сразу пытаемся получить процессы, не дожидаясь таймера
             val adbProcesses = listenerService.getProcessList(deviceToStart)
             if (adbProcesses.isNotEmpty()) {
                 adbProcesses.forEach { (pid, pkg) -> pidToProcess[pid] = pkg }
@@ -116,7 +140,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             val devices = listenerService.getConnectedDevices()
             header.updateDevices(devices)
             
-            // Обновляем список процессов напрямую из ADB
             val activeDevice = header.getSelectedDevice()
             if (activeDevice != null && activeDevice != "Loading devices...") {
                 val adbProcesses = listenerService.getProcessList(activeDevice)
@@ -124,9 +147,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 val selectedPackage = header.getSelectedProcess()
                 var currentSelectedPidChanged = false
                 
-                // Полная синхронизация: удаляем те, которых больше нет, и добавляем новые
                 if (adbProcesses.isNotEmpty()) {
-                    // Удаляем устаревшие PID
                     val currentPids = adbProcesses.keys
                     val pidsToRemove = pidToProcess.keys.filter { it !in currentPids }
                     if (pidsToRemove.isNotEmpty()) {
@@ -139,7 +160,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                         processesChanged = true
                     }
 
-                    // Добавляем/обновляем новые
                     adbProcesses.forEach { (pid, pkg) ->
                         if (pidToProcess[pid] != pkg) {
                             pidToProcess[pid] = pkg
@@ -155,7 +175,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     val savedProcess = settings.getState().lastSelectedProcess
                     header.updateProcesses(pidToProcess.values.distinct().sorted(), savedProcess)
                     
-                    // Если PID текущего выбранного приложения изменился (рестарт), запускаем перефильтрацию
                     if (currentSelectedPidChanged && selectedPackage != "All Processes") {
                         reFilterHistory()
                     }
@@ -163,7 +182,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             }
         }.start()
 
-        // Форсированный перезапуск через 3 секунды для получения актуального лога и процессов
         Timer(3000) {
             val devices = listenerService.getConnectedDevices()
             if (devices.isNotEmpty()) {
@@ -181,10 +199,143 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }.apply { isRepeats = false }.start()
     }
 
+    private fun addCustomContextActions(group: DefaultActionGroup) {
+        val editor = (consoleView as? ConsoleViewImpl)?.editor ?: return
+        val selectionModel = editor.selectionModel
+        val selectedText = selectionModel.selectedText
+        val currentLineText = getLineAtCaret(editor) ?: return
+        
+        val tagName = extractTagFromFormattedLine(currentLineText)
+
+        group.add(object : AnAction("Clear Log", "Clear console and history", AllIcons.Actions.GC) {
+            override fun actionPerformed(e: AnActionEvent) {
+                clearAllLogs()
+            }
+        })
+        group.addSeparator()
+
+        if (selectedText != null) {
+            group.add(object : AnAction("Copy Selection", "Copy selected text to clipboard", AllIcons.Actions.Copy) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    CopyPasteManager.getInstance().setContents(StringSelection(selectedText))
+                }
+            })
+        }
+
+        group.add(object : AnAction("Copy Message", "Copy only the message part", AllIcons.Actions.Copy) {
+            override fun actionPerformed(e: AnActionEvent) {
+                val msg = extractMessageOnly(currentLineText)
+                CopyPasteManager.getInstance().setContents(StringSelection(msg))
+            }
+        })
+
+        val searchText = selectedText ?: extractMessageOnly(currentLineText)
+        group.add(object : AnAction("Search with Google", "Search selection or message in Google", AllIcons.Actions.Search) {
+            override fun actionPerformed(e: AnActionEvent) {
+                BrowserUtil.browse("https://www.google.com/search?q=" + URLEncoder.encode(searchText, "UTF-8"))
+            }
+        })
+
+        group.add(object : AnAction("Explain with AI", "Send text to AI for explanation", AllIcons.Actions.IntentionBulb) {
+            override fun actionPerformed(e: AnActionEvent) {
+                val prompt = globalSettings.state.aiPrompt
+                val fullQuery = "$prompt\n\n$searchText"
+                
+                if (!tryOpenInInternalAi(fullQuery)) {
+                    BrowserUtil.browse("https://www.google.com/search?q=" + URLEncoder.encode(fullQuery, "UTF-8"))
+                }
+            }
+        })
+
+        if (tagName != null) {
+            group.addSeparator()
+            group.add(object : AnAction("Filter Tag '$tagName'", "Hide this tag in current project", AllIcons.General.Filter) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    settings.setTagSelected(tagName, false, allTags.keys)
+                    allTags[tagName]?.isSelected = false
+                    updateTagFilterIndicator()
+                    reFilterHistory()
+                }
+            })
+
+            group.add(object : AnAction("Always Ignore Tag '$tagName'", "Add this tag to global blacklist", AllIcons.Actions.DeleteTag) {
+                override fun actionPerformed(e: AnActionEvent) {
+                    globalSettings.setTagIgnored(tagName, true)
+                    allTags[tagName]?.isSelected = false
+                    updateTagFilterIndicator()
+                    reFilterHistory()
+                }
+            })
+        }
+    }
+
+    private fun tryOpenInInternalAi(query: String): Boolean {
+        return try {
+            val apiClass = Class.forName("com.android.tools.idea.gemini.GeminiPluginApi")
+            val companionField = apiClass.getDeclaredField("Companion")
+            val companion = companionField.get(null)
+            val getInstanceMethod = companion.javaClass.getMethod("getInstance")
+            val api = getInstanceMethod.invoke(companion)
+            
+            val requestSourceClass = Class.forName("com.android.tools.idea.gemini.GeminiPluginApi\$RequestSource")
+            val logcatSource = requestSourceClass.getField("LOGCAT").get(null)
+            
+            val stageChatQueryMethod = api.javaClass.getMethod("stageChatQuery", Project::class.java, String::class.java, requestSourceClass)
+            stageChatQueryMethod.invoke(api, project, query, logcatSource)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun extractMessageOnly(line: String): String {
+        val levelMatch = Regex("""\s([VDIWEA])\s""").find(line) ?: return line
+        val afterLevel = line.substring(levelMatch.range.last + 1).trim()
+        
+        val firstSpace = afterLevel.indexOf(' ')
+        return if (firstSpace != -1) afterLevel.substring(firstSpace).trim() else afterLevel
+    }
+
+    private fun getLineAtCaret(editor: Editor): String? {
+        val caretModel = editor.caretModel
+        val document = editor.document
+        val lineIndex = caretModel.logicalPosition.line
+        if (lineIndex < 0 || lineIndex >= document.lineCount) return null
+        
+        val startOffset = document.getLineStartOffset(lineIndex)
+        val endOffset = document.getLineEndOffset(lineIndex)
+        return document.getText(com.intellij.openapi.util.TextRange(startOffset, endOffset))
+    }
+
+    private fun extractTagFromFormattedLine(line: String): String? {
+        val levelMatch = Regex("""\s([VDIWEA])\s""").find(line) ?: return null
+        val levelIndex = levelMatch.range.last + 1
+        
+        val afterLevel = line.substring(levelIndex).trim()
+        val tagCandidate = afterLevel.split(' ').firstOrNull()?.removeSuffix(":")
+        return tagCandidate?.trim()
+    }
+
+    private fun updateTagFilterIndicator() {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val initialTags = getFilteredTagsForCurrentProcess()
+            val isFilterActive = initialTags.any { tag -> 
+                !tag.isSelected && tag.isPresentInCurrentLog && !globalSettings.isTagIgnored(tag.name) 
+            }
+            ApplicationManager.getApplication().invokeLater {
+                filterHeader?.setTagFilterActive(isFilterActive)
+            }
+        }
+    }
+
     private fun flushBuffer() {
         if (logBuffer.isEmpty()) return
         
         ApplicationManager.getApplication().invokeLater {
+            val editor = (consoleView as? ConsoleViewImpl)?.editor
+            val scrollingModel = editor?.scrollingModel
+            val oldOffset = scrollingModel?.verticalScrollOffset ?: 0
+
             var item = logBuffer.poll()
             while (item != null) {
                 if (item.tagName != null) {
@@ -193,6 +344,12 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     consoleView.print(item.message + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
                 }
                 item = logBuffer.poll()
+            }
+            
+            if (autoScrollToEnd) {
+                (consoleView as ConsoleViewImpl).scrollToEnd()
+            } else if (scrollingModel != null) {
+                scrollingModel.scrollVertically(oldOffset)
             }
         }
     }
@@ -203,11 +360,17 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         if (dialog.showAndGet()) {
             val newSelectedTags = tagsToShow.filter { it.isSelected }.map { it.name }.toSet()
             settings.setSelectedTags(newSelectedTags)
+            updateTagFilterIndicator()
             reFilterHistory()
         }
     }
 
     private fun restartListening(deviceName: String?) {
+        clearAllLogs()
+        listenerService.startListening(deviceName, ::onMessageReceived)
+    }
+
+    private fun clearAllLogs() {
         synchronized(rawLogsHistory) {
             rawLogsHistory.clear()
             allTags.clear()
@@ -218,7 +381,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 consoleView.clear()
             }
         }
-        listenerService.startListening(deviceName, ::onMessageReceived)
     }
 
     private fun onMessageReceived(message: String) {
@@ -242,7 +404,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val levelChar = matchResult?.groupValues?.get(6)
         val tagName = matchResult?.groupValues?.get(7)?.trim()
 
-        // Парсинг регистрации процесса из системных логов
         val isProcessInfoLine = line.contains("perfColdLaunchBoost")
         val processMatch = Regex("perfColdLaunchBoost: (.*?), (\\d+)").find(line)
         processMatch?.let {
@@ -254,22 +415,12 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             if (isTargetProcess && isNewPid) {
                 ApplicationManager.getApplication().invokeLater {
                     if (globalSettings.state.clearLogOnStart) {
-                        synchronized(rawLogsHistory) {
-                            rawLogsHistory.clear()
-                            allTags.clear()
-                            pidToProcess.clear()
-                            lastMetadata = null
-                            logBuffer.clear()
-                            consoleView.clear()
-                        }
+                        clearAllLogs()
                     }
                     pidToProcess[detectedPid] = pkg
                     header.updateProcesses(pidToProcess.values.distinct().sorted(), pkg)
 
-                    // Автоматическое открытие окна при старте приложения
                     if (globalSettings.state.openOnStart) {
-                        // Увеличиваем задержку, чтобы гарантированно перебить стандартный Logcat, 
-                        // который открывается самой Android Studio при детекте нового процесса.
                         Timer(1000) {
                             ApplicationManager.getApplication().invokeLater {
                                 val toolWindow = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
@@ -311,7 +462,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             }
         }
 
-        // Вместо немедленного invokeLater, добавляем в буфер
         if (matchResult != null && tagName != null && levelChar != null) {
             if (header.isLevelSelected(levelChar)) {
                 val isTagFromApp = isAppLine || (pid != null && tid != null && pid == tid)
@@ -336,11 +486,9 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     ): String {
         val state = globalSettings.state
         
-        // Логика скрытия дубликатов
         if (!state.showDuplicateTags && lastMetadata == currentMetadata) {
             val sb = StringBuilder()
             
-            // Собираем пустую строку той же длины, что и метаданные
             if (state.showDate && date != null) sb.append(" ".repeat(date.length + 1))
             if (state.showTime && time != null) {
                 sb.append(" ".repeat(time.length))
@@ -350,7 +498,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             if (state.showPid && pid != null) sb.append(" ".repeat(6))
             if (state.showTid && tid != null) sb.append(" ".repeat(6))
             
-            if (levelChar != null) sb.append("  ") // Буква + пробел
+            if (levelChar != null) sb.append("  ")
             
             if (tagName != null) {
                 val width = state.tagWidth
@@ -503,17 +651,22 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private fun createToolbar() {
         val actionGroup = DefaultActionGroup()
 
-        actionGroup.add(object : ToggleAction("Scroll to the End", "Scroll to the end of log", AllIcons.RunConfigurations.Scroll_down) {
-            override fun isSelected(e: AnActionEvent): Boolean = (consoleView as ConsoleViewImpl).editor?.let {
-                it.scrollingModel.verticalScrollOffset >= it.contentComponent.height - it.scrollingModel.visibleArea.height
-            } ?: true
+        val clearAllAction = object : AnAction("Clear All", "Clear console and history", AllIcons.Actions.GC) {
+            override fun actionPerformed(e: AnActionEvent) {
+                clearAllLogs()
+            }
+        }
+        actionGroup.add(clearAllAction)
+        actionGroup.addSeparator()
 
+        actionGroup.add(object : ToggleAction("Scroll to the End", "Scroll to the end of log", AllIcons.RunConfigurations.Scroll_down) {
+            override fun isSelected(e: AnActionEvent): Boolean = autoScrollToEnd
             override fun setSelected(e: AnActionEvent, state: Boolean) {
+                autoScrollToEnd = state
                 if (state) {
                     (consoleView as ConsoleViewImpl).scrollToEnd()
                 }
             }
-            
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
         })
 
@@ -569,7 +722,7 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             if (minimize) {
                 text = text.replace(Regex(" +"), " ")
             }
-            FileUtil.writeToFile(file, text)
+            com.intellij.openapi.util.io.FileUtil.writeToFile(file, text)
         } catch (_: Exception) {
 
         }

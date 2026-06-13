@@ -29,9 +29,17 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
         return myState.selectedTags?.contains(tag) ?: true
     }
 
-    fun setTagSelected(tag: String, selected: Boolean) {
-        val currentTags = myState.selectedTags?.toMutableSet() ?: mutableSetOf()
-        if (selected) currentTags.add(tag) else currentTags.remove(tag)
+    /**
+     * Устанавливает состояние выбора тега.
+     * @param allKnownTags список всех известных тегов для инициализации множества, если оно было null (режим "Show All")
+     */
+    fun setTagSelected(tag: String, selected: Boolean, allKnownTags: Collection<String>) {
+        val currentTags = myState.selectedTags?.toMutableSet() ?: allKnownTags.toMutableSet()
+        if (selected) {
+            currentTags.add(tag)
+        } else {
+            currentTags.remove(tag)
+        }
         myState.selectedTags = currentTags
     }
     

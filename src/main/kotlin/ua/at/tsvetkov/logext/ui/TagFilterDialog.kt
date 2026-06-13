@@ -1,6 +1,7 @@
 package ua.at.tsvetkov.logext.ui
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.DocumentAdapter
@@ -38,38 +39,16 @@ class TagFilterDialog(
         border = JBUI.Borders.customLine(JBColor.border(), 1)
     }
 
-    private val clearSearchBtn = JButton(AllIcons.Actions.Close).apply {
-        toolTipText = "Clear search"
-        preferredSize = Dimension(28, 24)
-        isFocusable = false
-        margin = JBUI.emptyInsets()
-    }
-
-    private val matchCaseBtn = JToggleButton(AllIcons.Actions.MatchCase).apply {
-        toolTipText = "Match Case"
-        preferredSize = Dimension(28, 24)
-        isFocusable = false
-        putClientProperty("ActionToolbar.smallVariant", true)
-        border = JBUI.Borders.empty(2)
-    }
-
     private val tagComponents = mutableMapOf<String, JComponent>()
     
-    // Ссылки на скролл-панели для сохранения позиции
     private var tagsScrollPane: JBScrollPane? = null
     private var ignoredScrollPane: JBScrollPane? = null
 
     init {
         title = "Filter Tags"
 
-        // Восстановление состояния поиска из настроек проекта
         val state = settings.getState()
         searchArea.text = state.lastTagSearch
-        matchCaseBtn.isSelected = state.lastTagMatchCase
-
-        clearSearchBtn.addActionListener {
-            searchArea.text = ""
-        }
 
         init()
         updatePanels()
@@ -92,10 +71,27 @@ class TagFilterDialog(
         }
         searchInputPanel.add(scrollPane, BorderLayout.CENTER)
 
-        val actionsPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 2, 0))
-        actionsPanel.add(clearSearchBtn)
-        actionsPanel.add(matchCaseBtn)
-        searchInputPanel.add(actionsPanel, BorderLayout.EAST)
+        // Используем ActionToolbar для кнопок поиска, чтобы корректно отображать состояние Match Case
+        val actionGroup = DefaultActionGroup()
+        
+        actionGroup.add(object : AnAction("Clear Search", "Clear search query", AllIcons.Actions.Close) {
+            override fun actionPerformed(e: AnActionEvent) {
+                searchArea.text = ""
+            }
+        })
+        
+        actionGroup.add(object : ToggleAction("Match Case", "Match case", AllIcons.Actions.MatchCase) {
+            override fun isSelected(e: AnActionEvent): Boolean = settings.getState().lastTagMatchCase
+            override fun setSelected(e: AnActionEvent, state: Boolean) {
+                settings.getState().lastTagMatchCase = state
+                applyFilter()
+            }
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        })
+
+        val toolbar = ActionManager.getInstance().createActionToolbar("TagFilterSearch", actionGroup, true)
+        toolbar.targetComponent = searchArea
+        searchInputPanel.add(toolbar.component, BorderLayout.EAST)
 
         centerContainer.add(searchInputPanel)
 
@@ -123,14 +119,11 @@ class TagFilterDialog(
                 applyFilter()
             }
         })
-        matchCaseBtn.addActionListener {
-            applyFilter()
-        }
     }
 
     private fun applyFilter() {
         val query = searchArea.text
-        val matchCase = matchCaseBtn.isSelected
+        val matchCase = settings.getState().lastTagMatchCase
 
         val searchTerms = query.split(Regex("[\\s\\n\\r]+")).filter { it.isNotEmpty() }
 
@@ -154,7 +147,6 @@ class TagFilterDialog(
     }
 
     private fun updatePanels() {
-        // Сохраняем текущую позицию прокрутки
         val tagsScrollValue = tagsScrollPane?.verticalScrollBar?.value ?: 0
         val ignoredScrollValue = ignoredScrollPane?.verticalScrollBar?.value ?: 0
 
@@ -172,7 +164,6 @@ class TagFilterDialog(
         centerPanel.add(tagsPanel)
         centerPanel.add(ignoredPanel)
 
-        // Восстанавливаем позицию прокрутки после перестроения
         SwingUtilities.invokeLater {
             tagsScrollPane?.verticalScrollBar?.value = tagsScrollValue
             ignoredScrollPane?.verticalScrollBar?.value = ignoredScrollValue
@@ -330,13 +321,11 @@ class TagFilterDialog(
     }
 
     override fun doOKAction() {
-        // Сохраняем глобальный черный список
         globalSettings.state.ignoredTags = ignoredTagsSet
         
-        // Сохраняем состояние поиска текущего проекта
         val state = settings.getState()
         state.lastTagSearch = searchArea.text
-        state.lastTagMatchCase = matchCaseBtn.isSelected
+        // lastTagMatchCase сохраняется сразу в ToggleAction
 
         super.doOKAction()
     }

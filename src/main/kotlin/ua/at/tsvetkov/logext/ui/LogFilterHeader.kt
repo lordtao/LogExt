@@ -1,6 +1,8 @@
 package ua.at.tsvetkov.logext.ui
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.ui.ComboBox
+import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
@@ -20,6 +22,9 @@ class LogFilterHeader(
     private val onTagFilterClicked: () -> Unit
 ) : JPanel(FlowLayout(FlowLayout.LEFT, 10, 5)) {
 
+    private val lampOn = IconLoader.getIcon("/icons/lamp_on.svg", javaClass)
+    private val lampOff = IconLoader.getIcon("/icons/lamp_off.svg", javaClass)
+
     private val deviceModel = DefaultComboBoxModel<String>()
     private val processModel = DefaultComboBoxModel<String>()
 
@@ -27,6 +32,10 @@ class LogFilterHeader(
     private val processCombo = ComboBox(processModel)
 
     private val levelChecks = mutableMapOf<String, JBCheckBox>()
+
+    private val tagFilterBtn = JButton("Tag filter", lampOff).apply {
+        toolTipText = "Tag filter"
+    }
 
     private var isUpdating = false
 
@@ -54,7 +63,6 @@ class LogFilterHeader(
         deviceCombo.addActionListener(deviceListener)
         processCombo.addActionListener(processListener)
 
-        val tagFilterBtn = JButton("Tag filter")
         tagFilterBtn.addActionListener { onTagFilterClicked() }
         add(tagFilterBtn)
 
@@ -112,4 +120,12 @@ class LogFilterHeader(
     fun getSelectedDevice(): String? = deviceCombo.selectedItem as? String
 
     fun isLevelSelected(levelChar: String): Boolean = levelChecks[levelChar]?.isSelected ?: true
+
+    /**
+     * Обновляет иконку кнопки фильтра в зависимости от активности фильтрации.
+     * @param isActive true, если часть тегов отфильтрована (выключена).
+     */
+    fun setTagFilterActive(isActive: Boolean) {
+        tagFilterBtn.icon = if (isActive) lampOn else lampOff
+    }
 }
