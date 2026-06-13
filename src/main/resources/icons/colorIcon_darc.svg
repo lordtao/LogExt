@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 13 13">
+    <!-- Упрощенная иконка 13x13 для LogCat -->
+
+    <!-- Фон терминала -->
+    <rect x="1" y="2" width="11" height="9" rx="1.5" fill="#2D3139" stroke="#3DDC84" stroke-width="0.8"/>
+
+    <!-- Верхняя полоска терминала (упрощенная) -->
+    <path d="M 1,4.5 L 12,4.5" stroke="#35383D" stroke-width="0.8"/>
+
+    <!-- Условные точки Android (ушки) - упрощены до намека -->
+    <rect x="3" y="1" width="1.5" height="1.5" rx="0.5" fill="#3DDC84" opacity="0.8"/>
+    <rect x="8.5" y="1" width="1.5" height="1.5" rx="0.5" fill="#3DDC84" opacity="0.8"/>
+
+    <!-- Строки логов (упрощенные точки) -->
+    <circle cx="3" cy="6.5" r="0.7" fill="#3574F0"/>
+    <circle cx="3" cy="8.5" r="0.7" fill="#FF9800"/>
+
+    <!-- Молния (упрощенная геометрия для 13x13) -->
+    <path d="M 10,4 L 7,8 H 9 L 8,12 L 12,7 H 10 Z" fill="#FFFFFF" stroke="#3DDC84" stroke-width="0.5" stroke-linejoin="round"/>
+</svg>

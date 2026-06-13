@@ -13,8 +13,7 @@
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
     <description><![CDATA[
-        Enter short description for your plugin here.<br>
-        <em>most HTML tags may be used</em>
+        <b>TAO LogExt</b> is a highly customizable Android LogCat viewer plugin for Android Studio. It provides flexible filtering, performance optimizations, and AI integration for a more controlled logging experience.
     ]]></description>
 
     <!-- Product and plugin compatibility requirements.
@@ -29,8 +28,10 @@
         <action id="ua.at.tsvetkov.logext.actions.OpenLogCatAction"
                 class="ua.at.tsvetkov.logext.actions.OpenLogCatAction"
                 text="TAO LogExt"
+                icon="/icons/colorIcon_darc.svg"
                 description="Open TAO LogExt Tool Window">
             <add-to-group group-id="ViewMenu" anchor="last"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
     </actions>
 
