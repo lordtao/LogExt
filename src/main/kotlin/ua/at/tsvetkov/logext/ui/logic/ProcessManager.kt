@@ -8,6 +8,8 @@ class ProcessManager {
     private val pidToProcess = mutableMapOf<String, String>()
 
     fun updateProcess(pid: String, pkg: String): Boolean {
+        val pidInt = pid.toIntOrNull() ?: 0
+        if (pidInt < 0 || pkg.contains(",")) return false
         val changed = pidToProcess[pid] != pkg
         pidToProcess[pid] = pkg
         return changed
