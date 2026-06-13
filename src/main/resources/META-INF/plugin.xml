@@ -13,8 +13,31 @@
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
     <description><![CDATA[
-        <b>TAO LogExt</b> is a highly customizable Android LogCat viewer plugin for Android Studio. It provides flexible filtering, performance optimizations.<br>If your logs are overloaded with unnecessary details, then this plugin is exactly what you need.
+        <p><b>TAO LogExt</b> is a highly customizable Android LogCat viewer plugin for Android Studio designed to provide a more readable, performance-optimized, and AI-powered logging experience.</p>
+
+        <h3>Key Features:</h3>
+        <ul>
+            <li><b>Advanced Tag Management:</b> Two-column filtering system with global blacklist (Ignored Tags).</li>
+            <li><b>Multi-tag Search:</b> Filter by multiple tag names simultaneously using spaces or new lines.</li>
+            <li><b>AI Integration:</b> Instant log analysis using Gemini AI Agent (Studio Bot) directly from the context menu.</li>
+            <li><b>Superior Performance:</b> High-speed buffering (100ms updates) ensures IDE responsiveness even during heavy logging.</li>
+            <li><b>Custom Coloring:</b> Fully customizable foreground and background colors for every log level.</li>
+            <li><b>Readability:</b> Option to hide duplicate metadata (Date, Time, PID, Tag) in consecutive lines.</li>
+            <li><b>Source Navigation:</b> Clickable links for <code>FileName.kt:Line</code> patterns.</li>
+            <li><b>Workflow Automation:</b> Auto-focus on app start and process persistence.</li>
+        </ul>
     ]]></description>
+
+    <change-notes><![CDATA[
+        <ul>
+            <li>Added global "Ignored Tags" blacklist across all projects.</li>
+            <li>Implemented high-speed log buffering to prevent IDE freezes.</li>
+            <li>Integrated Gemini AI for log explanation.</li>
+            <li>Added clickable source code links in logs.</li>
+            <li>Implemented visual activity indicator (lamp icon) for active filters.</li>
+            <li>Added multi-tag search support.</li>
+        </ul>
+    ]]></change-notes>
 
     <!-- Product and plugin compatibility requirements.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
@@ -24,17 +47,6 @@
 
     <!-- Extension points defined by the plugin.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
-    <actions>
-        <action id="ua.at.tsvetkov.logext.actions.OpenLogCatAction"
-                class="ua.at.tsvetkov.logext.actions.OpenLogCatAction"
-                text="TAO LogExt"
-                icon="/icons/colorIcon_darc.svg"
-                description="Open TAO LogExt Tool Window">
-            <add-to-group group-id="ViewMenu" anchor="last"/>
-            <add-to-group group-id="ToolsMenu" anchor="last"/>
-        </action>
-    </actions>
-
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="TAO LogExt"
                     secondary="false"
@@ -42,4 +54,15 @@
                     anchor="bottom"
                     factoryClass="ua.at.tsvetkov.logext.ui.LogCatToolWindowFactory"/>
     </extensions>
+
+    <actions>
+        <action id="ua.at.tsvetkov.logext.actions.OpenLogCatAction"
+                class="ua.at.tsvetkov.logext.actions.OpenLogCatAction"
+                text="TAO LogExt"
+                icon="/icons/toolWindowIcon.svg"
+                description="Open TAO LogExt Tool Window">
+            <add-to-group group-id="ViewMenu" anchor="last"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>

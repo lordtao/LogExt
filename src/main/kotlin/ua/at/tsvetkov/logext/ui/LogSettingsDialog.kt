@@ -24,11 +24,9 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
     private val globalSettings = LogCatGlobalSettingsService.getInstance()
     private val colorPanels = mutableMapOf<String, Pair<ColorPanel, ColorPanel>>()
     
-    // Startup Settings
     private val clearLogOnStartCheck = JBCheckBox("Clear log on application start", globalSettings.state.clearLogOnStart)
     private val openOnStartCheck = JBCheckBox("Open tool window on application start", globalSettings.state.openOnStart)
     
-    // Log Line View Settings
     private val showDateCheck = JBCheckBox("Date", globalSettings.state.showDate)
     private val showTimeCheck = JBCheckBox("Time", globalSettings.state.showTime)
     private val showMillisCheck = JBCheckBox("Milliseconds", globalSettings.state.showMillis)
@@ -37,7 +35,6 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
     private val showDuplicateTagsCheck = JBCheckBox("Show duplicate tags/metadata", globalSettings.state.showDuplicateTags)
     private val tagWidthSpinner = JSpinner(SpinnerNumberModel(globalSettings.state.tagWidth, 0, 100, 1))
     
-    // AI Settings
     private val aiPromptArea = JBTextArea(3, 50).apply {
         text = globalSettings.state.aiPrompt
         lineWrap = true
@@ -70,11 +67,9 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
     override fun createCenterPanel(): JComponent {
         val formBuilder = FormBuilder.createFormBuilder()
 
-        // 1. Цветовые настройки
         formBuilder.addComponent(TitledSeparator("Color Settings"))
         formBuilder.addComponent(createColorSettingsPanel())
 
-        // 2. Настройки вида строки
         formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Log Line View")))
         
         val checkboxesPanel = JPanel(FlowLayout(FlowLayout.LEFT, 10, 0))
@@ -96,7 +91,6 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
 
         formBuilder.addLabeledComponent("Preview:", formatPreviewLabel)
 
-        // 3. Настройки ИИ
         formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("AI Explainer Settings")))
         formBuilder.addLabeledComponent("AI Prompt:", JBScrollPane(aiPromptArea))
         formBuilder.addComponent(JBLabel("Use this prompt when sending logs to AI for explanation.").apply {
@@ -104,7 +98,6 @@ class LogSettingsDialog(project: Project) : DialogWrapper(project) {
             foreground = JBColor.GRAY
         })
 
-        // 4. Настройки старта
         formBuilder.addComponent(JBUI.Borders.emptyTop(10).wrap(TitledSeparator("Startup Settings")))
         formBuilder.addComponent(clearLogOnStartCheck)
         formBuilder.addComponent(openOnStartCheck)

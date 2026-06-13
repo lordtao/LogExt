@@ -118,7 +118,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         createToolbar()
         Disposer.register(this, consoleView)
 
-        // Инициализация иконки фильтра при старте
         updateTagFilterIndicator()
 
         bufferTimer = Timer(100) {
@@ -182,7 +181,6 @@ class LogCatPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                         reFilterHistory()
                     }
                     
-                    // Обновляем индикатор фильтра, так как могли появиться новые теги
                     updateTagFilterIndicator()
                 }
             }

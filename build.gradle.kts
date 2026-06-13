@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.7.1"
 }
 
-val backNumber = 15
+val backNumber = 17
 
 val gitCommitNumber = providers.exec {
     commandLine("git", "rev-list", "--count", "HEAD")
@@ -48,6 +48,12 @@ intellijPlatform {
         changeNotes = """
             Initial version
         """.trimIndent()
+    }
+
+    signing {
+        certificateChainFile = file("certificate_chain.crt")
+        privateKeyFile = file("private_key.pem")
+        password = project.findProperty("pluginSigningPassword")?.toString()
     }
 }
 
