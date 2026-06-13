@@ -37,6 +37,7 @@ class TagFilterDialog(
     }
 
     private val tagComponents = mutableMapOf<String, JComponent>()
+    private val ignoredComponents = mutableMapOf<String, JComponent>()
     
     private var tagsScrollPane: JBScrollPane? = null
     private var ignoredScrollPane: JBScrollPane? = null
@@ -123,27 +124,26 @@ class TagFilterDialog(
     private fun applyFilter() {
         val query = searchArea.text
         val matchCase = settings.getState().lastTagMatchCase
-
         val searchTerms = query.split(Regex("[\\s\\n\\r]+")).filter { it.isNotEmpty() }
 
         for ((tagName, component) in tagComponents) {
             val tagInfo = workingTags.find { it.name == tagName }
-            
-            val matchesQuery = if (searchTerms.isEmpty()) {
-                true
-            } else {
+            val matchesQuery = if (searchTerms.isEmpty()) true else {
                 searchTerms.any { term ->
                     if (matchCase) tagName.contains(term) else tagName.lowercase().contains(term.lowercase())
                 }
             }
-            
-            val matchesInactiveFilter = if (showOnlyInactive) {
-                tagInfo?.isSelected == false
-            } else {
-                true
-            }
-            
+            val matchesInactiveFilter = if (showOnlyInactive) tagInfo?.isSelected == false else true
             component.isVisible = matchesQuery && matchesInactiveFilter
+        }
+
+        for ((tagName, component) in ignoredComponents) {
+            val matchesQuery = if (searchTerms.isEmpty()) true else {
+                searchTerms.any { term ->
+                    if (matchCase) tagName.contains(term) else tagName.lowercase().contains(term.lowercase())
+                }
+            }
+            component.isVisible = matchesQuery
         }
 
         centerPanel.revalidate()
@@ -156,6 +156,7 @@ class TagFilterDialog(
 
         centerPanel.removeAll()
         tagComponents.clear()
+        ignoredComponents.clear()
 
         val activeTags = workingTags.filter { !ignoredTagsSet.contains(it.name) }
             .sortedWith(compareByDescending<TagInfo> { it.isApplicationTag }.thenBy { it.name })
@@ -182,7 +183,6 @@ class TagFilterDialog(
         showIgnoreButton: Boolean
     ): JPanel {
         val panel = JPanel(BorderLayout())
-        
         panel.add(JBLabel(title).apply {
             font = font.deriveFont(Font.BOLD)
             border = JBUI.Borders.emptyBottom(5)
@@ -199,9 +199,7 @@ class TagFilterDialog(
             row.border = JBUI.Borders.empty(1, 0)
 
             val cb = JBCheckBox(tag.name, tag.isSelected).apply {
-                if (tag.isApplicationTag) {
-                    font = font.deriveFont(Font.BOLD)
-                }
+                if (tag.isApplicationTag) font = font.deriveFont(Font.BOLD)
             }
 
             if (!tag.isPresentInCurrentLog) cb.foreground = JBColor.RED
@@ -258,7 +256,6 @@ class TagFilterDialog(
         footer.add(mainButtons)
 
         val bottomButtonsPanel = JPanel(BorderLayout())
-        
         val showInactiveBtn = JToggleButton("Show inactive")
         showInactiveBtn.isSelected = showOnlyInactive
         if (showOnlyInactive) showInactiveBtn.text = "Show all"
@@ -273,14 +270,11 @@ class TagFilterDialog(
         ignoreAllBtn.addActionListener {
             groupTags.forEach {
                 val comp = tagComponents[it.name]
-                if (comp != null && comp.isVisible) {
-                    ignoredTagsSet.add(it.name)
-                }
+                if (comp != null && comp.isVisible) ignoredTagsSet.add(it.name)
             }
             updatePanels()
         }
         bottomButtonsPanel.add(ignoreAllBtn, BorderLayout.EAST)
-        
         footer.add(bottomButtonsPanel)
 
         panel.add(footer, BorderLayout.SOUTH)
@@ -319,7 +313,7 @@ class TagFilterDialog(
             }
             row.add(label)
 
-            tagComponents[tagName] = row
+            ignoredComponents[tagName] = row
             listPanel.add(row)
         }
 

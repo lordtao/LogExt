@@ -20,6 +20,7 @@
             <li><b>Advanced Tag Management:</b> Two-column filtering system with global blacklist (Ignored Tags).</li>
             <li><b>Multi-tag Search:</b> Filter by multiple tag names simultaneously using spaces or new lines.</li>
             <li><b>AI Integration:</b> Instant log analysis using Gemini AI Agent (Studio Bot) directly from the context menu.</li>
+            <li><b>Log Export (AI Optimized):</b> Save filtered optimazing logs to a file, reducing token consumption when using external AI models for analysis.</li>
             <li><b>Superior Performance:</b> High-speed buffering (100ms updates) ensures IDE responsiveness even during heavy logging.</li>
             <li><b>Custom Coloring:</b> Fully customizable foreground and background colors for every log level.</li>
             <li><b>Readability:</b> Option to hide duplicate metadata (Date, Time, PID, Tag) in consecutive lines.</li>
