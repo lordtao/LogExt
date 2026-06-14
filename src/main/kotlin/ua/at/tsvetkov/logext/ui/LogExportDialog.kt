@@ -10,6 +10,7 @@ import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.util.ui.FormBuilder
 import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
+import java.awt.Dimension
 import java.io.File
 import javax.swing.JComponent
 
@@ -46,10 +47,12 @@ class LogExportDialog(private val project: Project) : DialogWrapper(project) {
     }
 
     override fun createCenterPanel(): JComponent {
-        return FormBuilder.createFormBuilder()
+        val panel = FormBuilder.createFormBuilder()
             .addLabeledComponent("Export to:", pathField)
             .addComponent(minimizeCheck)
             .panel
+        panel.preferredSize = Dimension(600, panel.preferredSize.height)
+        return panel
     }
 
     fun getExportPath(): String = pathField.text
