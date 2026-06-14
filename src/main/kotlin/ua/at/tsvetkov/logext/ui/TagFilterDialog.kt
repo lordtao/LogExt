@@ -2,8 +2,14 @@ package ua.at.tsvetkov.logext.ui
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.*
+import com.intellij.openapi.fileChooser.FileChooser
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.fileChooser.FileChooserFactory
+import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBCheckBox
@@ -16,6 +22,7 @@ import ua.at.tsvetkov.logext.models.TagInfo
 import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
 import ua.at.tsvetkov.logext.services.LogCatSettingsService
 import java.awt.*
+import java.io.File
 import javax.swing.*
 import javax.swing.event.DocumentEvent
 
@@ -23,7 +30,7 @@ import javax.swing.event.DocumentEvent
  * Диалоговое окно для фильтрации тегов.
  */
 class TagFilterDialog(
-    project: Project,
+    private val project: Project,
     private val allTags: List<TagInfo>
 ) : DialogWrapper(project) {
 
@@ -46,6 +53,15 @@ class TagFilterDialog(
     private var ignoredScrollPane: JBScrollPane? = null
     
     private var showOnlyInactive = false
+
+    private val saveButton = JButton("Save Preset").apply {
+        isEnabled = false
+        addActionListener { saveSearch() }
+    }
+
+    private val loadButton = JButton("Load Preset").apply {
+        addActionListener { loadSearch() }
+    }
 
     init {
         title = "Filter Tags"
@@ -106,6 +122,12 @@ class TagFilterDialog(
         centerContainer.add(Box.createVerticalStrut(2))
         centerContainer.add(hintLabel)
 
+        val buttonsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 5))
+        buttonsPanel.add(saveButton)
+        buttonsPanel.add(Box.createHorizontalStrut(10))
+        buttonsPanel.add(loadButton)
+        centerContainer.add(buttonsPanel)
+
         mainPanel.add(centerContainer, BorderLayout.CENTER)
         mainPanel.border = JBUI.Borders.emptyBottom(10)
         return mainPanel
@@ -117,11 +139,51 @@ class TagFilterDialog(
     }
 
     private fun setupSearch() {
+        saveButton.isEnabled = searchArea.text.isNotEmpty()
         searchArea.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: DocumentEvent) {
+                saveButton.isEnabled = searchArea.text.isNotEmpty()
                 applyFilter()
             }
         })
+    }
+
+    private fun saveSearch() {
+        val descriptor = FileSaverDescriptor("Save Preset", "Enter the name of the file to save preset to", "tags")
+        val saveDialog = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
+
+        val lastPath = globalSettings.state.lastTagsPath
+        val baseDir = if (lastPath != null) LocalFileSystem.getInstance().findFileByPath(lastPath) else null
+
+        val fileWrapper = saveDialog.save(baseDir, "preset.tags")
+        fileWrapper?.let {
+            val file = it.file
+            globalSettings.state.lastTagsPath = file.parent
+            try {
+                file.writeText(searchArea.text)
+            } catch (e: Exception) {
+                Messages.showErrorDialog(project, "Error saving file: ${e.message}", "Error")
+            }
+        }
+    }
+
+    private fun loadSearch() {
+        val descriptor = FileChooserDescriptorFactory.createSingleFileDescriptor("tags")
+            .withTitle("Select Preset File")
+
+        val lastPath = globalSettings.state.lastTagsPath
+        val toSelect = if (lastPath != null) LocalFileSystem.getInstance().findFileByPath(lastPath) else null
+
+        val file = FileChooser.chooseFile(descriptor, project, toSelect)
+        if (file != null) {
+            globalSettings.state.lastTagsPath = file.parent.path
+            try {
+                val content = File(file.path).readText()
+                searchArea.text = content
+            } catch (e: Exception) {
+                Messages.showErrorDialog(project, "Error loading file: ${e.message}", "Error")
+            }
+        }
     }
 
     private fun applyFilter() {

@@ -18,6 +18,7 @@ The plugin features a two-column filtering system designed to manage large numbe
 *   **Global Blacklist (Ignored Tags)**: Move persistent or noisy system tags to a global blacklist that remains active across different Android projects.
 *   **Inactive Toggle**: Filter the tag list to show only currently hidden tags, allowing for quick re-enabling.
 *   **Activity Indicator**: A lamp icon on the toolbar indicates when a project filter is active, helping to avoid missing logs due to hidden tags.
+*   **Tags Preset**: Save/load tags presets.
 
 ### 2. Context Actions and AI Integration
 Access essential actions directly from the log stream via the context menu.
