@@ -236,7 +236,7 @@ class TagFilterDialog(
         footer.layout = BoxLayout(footer, BoxLayout.Y_AXIS)
 
         val mainButtons = JPanel(GridLayout(1, 2))
-        val selectAll = JButton("Select All")
+        val selectAll = JButton("Activate All")
         selectAll.addActionListener {
             checkBoxes.forEach {
                 if (it.parent.isVisible) {
@@ -245,7 +245,7 @@ class TagFilterDialog(
                 }
             }
         }
-        val clearAll = JButton("Clear All")
+        val clearAll = JButton("Deactivate All")
         clearAll.addActionListener {
             checkBoxes.forEach {
                 if (it.parent.isVisible) {
@@ -259,17 +259,17 @@ class TagFilterDialog(
         footer.add(mainButtons)
 
         val bottomButtonsPanel = JPanel(BorderLayout())
-        val showInactiveBtn = JToggleButton("Show inactive")
+        val showInactiveBtn = JToggleButton("Show Inactive")
         showInactiveBtn.isSelected = showOnlyInactive
-        if (showOnlyInactive) showInactiveBtn.text = "Show all"
+        if (showOnlyInactive) showInactiveBtn.text = "Show All"
         showInactiveBtn.addActionListener {
             showOnlyInactive = showInactiveBtn.isSelected
-            showInactiveBtn.text = if (showOnlyInactive) "Show all" else "Show inactive"
+            showInactiveBtn.text = if (showOnlyInactive) "Show All" else "Show Inactive"
             applyFilter()
         }
         bottomButtonsPanel.add(showInactiveBtn, BorderLayout.WEST)
 
-        val ignoreAllBtn = JButton("Ignore all")
+        val ignoreAllBtn = JButton("Ignore All")
         ignoreAllBtn.addActionListener {
             groupTags.forEach {
                 val comp = tagComponents[it.name]
@@ -324,7 +324,7 @@ class TagFilterDialog(
         ignoredScrollPane = scroll
         panel.add(scroll, BorderLayout.CENTER)
 
-        val returnAllBtn = JButton("Return all")
+        val returnAllBtn = JButton("Return All")
         returnAllBtn.addActionListener {
             ignoredTagsSet.clear()
             updatePanels()
