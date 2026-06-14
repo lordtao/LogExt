@@ -2,7 +2,7 @@ package ua.at.tsvetkov.logext.ui
 
 import com.intellij.execution.filters.Filter
 import com.intellij.execution.filters.OpenFileHyperlinkInfo
-import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.FilenameIndex
@@ -13,7 +13,6 @@ import com.intellij.psi.search.GlobalSearchScope
  */
 class LogSourceLinkFilter(private val project: Project) : Filter {
 
-    // Паттерн строки "Something.kt:45" или "AnotherFile.java:10"
     private val pattern = Regex("""(\b[\w-]+\.(?:kt|java)):(\d+)\b""")
 
     override fun applyFilter(line: String, entireLength: Int): Filter.Result? {
@@ -25,8 +24,8 @@ class LogSourceLinkFilter(private val project: Project) : Filter {
         val startOffset = entireLength - line.length + match.range.first
         val endOffset = entireLength - line.length + match.range.last + 1
 
-        val virtualFile: VirtualFile? = runReadAction {
-            val files = FilenameIndex.getVirtualFilesByName(project, fileName, GlobalSearchScope.projectScope(project))
+        val virtualFile: VirtualFile? = ApplicationManager.getApplication().runReadAction<VirtualFile?> {
+            val files = FilenameIndex.getVirtualFilesByName(fileName, GlobalSearchScope.projectScope(project))
             files.firstOrNull()
         }
         

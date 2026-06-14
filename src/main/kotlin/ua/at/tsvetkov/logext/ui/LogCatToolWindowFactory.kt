@@ -18,4 +18,9 @@ class LogCatToolWindowFactory : ToolWindowFactory {
         
         Disposer.register(toolWindow.contentManager, logCatPanel)
     }
+
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun isApplicable(project: Project): Boolean = true
+
+    override fun shouldBeAvailable(project: Project): Boolean = true
 }

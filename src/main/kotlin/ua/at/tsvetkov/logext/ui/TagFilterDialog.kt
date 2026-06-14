@@ -50,7 +50,7 @@ class TagFilterDialog(
     init {
         title = "Filter Tags"
 
-        val state = settings.getState()
+        val state = settings.state
         searchArea.text = state.lastTagSearch
 
         init()
@@ -84,11 +84,11 @@ class TagFilterDialog(
         })
         
         actionGroup.add(object : ToggleAction("Match Case", "Match case", AllIcons.Actions.MatchCase) {
-            override fun isSelected(e: AnActionEvent): Boolean = settings.getState().lastTagMatchCase
+            override fun isSelected(e: AnActionEvent): Boolean = settings.state.lastTagMatchCase
             override fun setSelected(e: AnActionEvent, state: Boolean) {
-                settings.getState().lastTagMatchCase = state
+                settings.state.lastTagMatchCase = state
                 applyFilter()
-                toolbar.updateActionsImmediately()
+                toolbar.updateActionsAsync()
             }
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
         })
@@ -126,7 +126,7 @@ class TagFilterDialog(
 
     private fun applyFilter() {
         val query = searchArea.text
-        val matchCase = settings.getState().lastTagMatchCase
+        val matchCase = settings.state.lastTagMatchCase
         val searchTerms = query.split(Regex("[\\s\\n\\r]+")).filter { it.isNotEmpty() }
 
         for ((tagName, component) in tagComponents) {
@@ -336,7 +336,7 @@ class TagFilterDialog(
 
     override fun doOKAction() {
         globalSettings.state.ignoredTags = ignoredTagsSet
-        val state = settings.getState()
+        val state = settings.state
         state.lastTagSearch = searchArea.text
         super.doOKAction()
     }
