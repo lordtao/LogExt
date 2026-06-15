@@ -503,30 +503,6 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private fun createToolbar() {
         val actionGroup = DefaultActionGroup()
 
-        actionGroup.add(object : AnAction("Import Log", "Import LogCat from file", AllIcons.ToolbarDecorator.Import) {
-            override fun actionPerformed(e: AnActionEvent) {
-                val descriptor = FileChooserDescriptor(true, false, false, false, false, false).apply {
-                        title = "Import LogCat File"
-                        description = "Choose a .logcat file to analyze"
-                        withExtensionFilter("Logcat files", "logcat")
-                    }
-
-                val virtualFile = FileChooser.chooseFile(descriptor, project, null)
-                virtualFile?.let {
-                    val logFile = VfsUtilCore.virtualToIoFile(it)
-                    val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("TAO LogExt") ?: return
-                    val importedPanel = LogImportedPanel(project, logFile)
-
-                    val content = ContentFactory.getInstance().createContent(importedPanel, logFile.name, false)
-                    content.isCloseable = true
-
-                    toolWindow.contentManager.addContent(content)
-                    toolWindow.contentManager.setSelectedContent(content)
-                    Disposer.register(content, importedPanel)
-                }
-            }
-        })
-
         actionGroup.addSeparator()
         actionGroup.add(object : AnAction("Clear All", null, AllIcons.Actions.GC) {
             override fun actionPerformed(e: AnActionEvent) {
@@ -560,6 +536,30 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         actionGroup.add(object : AnAction("Copy Log", null, AllIcons.Actions.Copy) {
             override fun actionPerformed(e: AnActionEvent) {
                 CopyPasteManager.getInstance().setContents(StringSelection((consoleView as ConsoleViewImpl).text))
+            }
+        })
+
+        actionGroup.add(object : AnAction("Import Log", "Import LogCat from file", AllIcons.ToolbarDecorator.Import) {
+            override fun actionPerformed(e: AnActionEvent) {
+                val descriptor = FileChooserDescriptor(true, false, false, false, false, false).apply {
+                    title = "Import LogCat File"
+                    description = "Choose a .logcat file to analyze"
+                    withExtensionFilter("Logcat files", "logcat")
+                }
+
+                val virtualFile = FileChooser.chooseFile(descriptor, project, null)
+                virtualFile?.let {
+                    val logFile = VfsUtilCore.virtualToIoFile(it)
+                    val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("TAO LogExt") ?: return
+                    val importedPanel = LogImportedPanel(project, logFile)
+
+                    val content = ContentFactory.getInstance().createContent(importedPanel, logFile.name, false)
+                    content.isCloseable = true
+
+                    toolWindow.contentManager.addContent(content)
+                    toolWindow.contentManager.setSelectedContent(content)
+                    Disposer.register(content, importedPanel)
+                }
             }
         })
 

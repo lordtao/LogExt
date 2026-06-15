@@ -29,13 +29,13 @@ Access essential actions directly from the log stream via the context menu.
 *   **Copy Message**: Copy only the message text, automatically removing metadata such as dates, PIDs, and tags.
 *   **Search with Google**: Perform a web search for error codes or exception messages in one click.
 *   **Log Export (AI Optimized)**: Save filtered logs to a file. Includes an option to minimize log data, reducing token consumption when using external AI models for analysis.
+*   **Log Import**: Import standard `.logcat` files from LogCat in separate tabs. All filtering and AI features are supported for imported logs.
 *   **Quick Filter/Ignore**: Hide a tag from the current project or add it to the global blacklist using the right-click menu.
 
 ![Log Export](media/img_4.png)
 
 ### 3. Workflow Automation
 *   **Auto-Focus**: Automatically brings the tool window to the front when an application starts.
-*   **Log Import**: Import standard `.logcat` files from LogCat in separate tabs. All filtering and AI features are supported for imported logs.
 *   **Process Persistence**: Automatically reconnects to the selected process after app restarts or device reconnections.
 *   **Source Code Navigation**: Detects `FileName.kt:Line` patterns and provides clickable links to the corresponding source code.
 

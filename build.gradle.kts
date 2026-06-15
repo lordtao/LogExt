@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "ua.at.tsvetkov"
-version = "1.0.4"
+version = "1.0.5"
 
 val localIdePath: String = System.getProperty("idea.home.path")
     ?: System.getenv("IDEA_HOME")
