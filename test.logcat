@@ -1,0 +1,248 @@
+{
+  "metadata": {
+    "device": {
+      "physicalDevice": {
+        "serialNumber": "38e253f0",
+        "isOnline": true,
+        "release": "12",
+        "apiLevel": {
+          "majorVersion": 31,
+          "minorVersion": 0
+        },
+        "featureLevel": 31,
+        "manufacturer": "Xiaomi",
+        "model": "M2102J20SG",
+        "type": "HANDHELD"
+      }
+    },
+    "filter": "",
+    "projectApplicationIds": []
+  },
+  "logcatMessages": [
+    {
+      "header": {
+        "logLevel": "DEBUG",
+        "pid": 15639,
+        "tid": 16129,
+        "applicationId": "com.android.phone",
+        "processName": "com.android.phone",
+        "tag": "FiveGDataOptimize",
+        "timestamp": {
+          "seconds": 1781515651,
+          "nanos": 876000000
+        }
+      },
+      "message": "TxRx: 0, Tx: 0, Rx: 0, Hit: 0"
+    },
+    {
+      "header": {
+        "logLevel": "INFO",
+        "pid": 1054,
+        "tid": 2761,
+        "applicationId": "android.hardware.sensors@1.0-service",
+        "processName": "android.hardware.sensors@1.0-service",
+        "tag": "sensors-hal",
+        "timestamp": {
+          "seconds": 1781515652,
+          "nanos": 219000000
+        }
+      },
+      "message": "ssc_conn_event_cb:484, event[0] sensor:pedometer  Wakeup msg_id\u003d129, ts\u003d238799849531645"
+    },
+    {
+      "header": {
+        "logLevel": "DEBUG",
+        "pid": 15639,
+        "tid": 15639,
+        "applicationId": "com.android.phone",
+        "processName": "com.android.phone",
+        "tag": "UCDetectService_8150",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 172000000
+        }
+      },
+      "message": "action is android.intent.action.BATTERY_CHANGED"
+    },
+    {
+      "header": {
+        "logLevel": "DEBUG",
+        "pid": 5807,
+        "tid": 6394,
+        "applicationId": "com.miui.powerkeeper",
+        "processName": "com.miui.powerkeeper",
+        "tag": "PowerCheckerService",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 172000000
+        }
+      },
+      "message": "onBatteryChanged, mBatteryLevel \u003d 1, status \u003d 2, level \u003d 1, plug \u003d 1, scale \u003d 100"
+    },
+    {
+      "header": {
+        "logLevel": "DEBUG",
+        "pid": 15639,
+        "tid": 15639,
+        "applicationId": "com.android.phone",
+        "processName": "com.android.phone",
+        "tag": "UCDetectService_8150",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 172000000
+        }
+      },
+      "message": "onEventReceive6 : USB plug \u003d 1"
+    },
+    {
+      "header": {
+        "logLevel": "DEBUG",
+        "pid": 3042,
+        "tid": 3042,
+        "applicationId": "org.codeaurora.ims",
+        "processName": "org.codeaurora.ims",
+        "tag": "QtiCarrierConfigHelper",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 176000000
+        }
+      },
+      "message": "WARNING, no carrier configs on phone Id: 0"
+    },
+    {
+      "header": {
+        "logLevel": "DEBUG",
+        "pid": 3042,
+        "tid": 3042,
+        "applicationId": "org.codeaurora.ims",
+        "processName": "org.codeaurora.ims",
+        "tag": "VideoCall_LowBattery",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 176000000
+        }
+      },
+      "message": "disconnectVideoCalls on low battery"
+    },
+    {
+      "header": {
+        "logLevel": "DEBUG",
+        "pid": 3042,
+        "tid": 3042,
+        "applicationId": "org.codeaurora.ims",
+        "processName": "org.codeaurora.ims",
+        "tag": "VideoCall_LowBattery",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 176000000
+        }
+      },
+      "message": "disconnectVideoCalls "
+    },
+    {
+      "header": {
+        "logLevel": "DEBUG",
+        "pid": 5807,
+        "tid": 6510,
+        "applicationId": "com.miui.powerkeeper",
+        "processName": "com.miui.powerkeeper",
+        "tag": "PowerKeeper.Thermal",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 177000000
+        }
+      },
+      "message": "mBatteryTemperature: 27"
+    },
+    {
+      "header": {
+        "logLevel": "INFO",
+        "pid": 30610,
+        "tid": 30610,
+        "applicationId": "com.miui.securitycenter.remote",
+        "processName": "com.miui.securitycenter.remote",
+        "tag": "PowerUtils",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 177000000
+        }
+      },
+      "message": "getSurfaceTemprature temp: 29"
+    },
+    {
+      "header": {
+        "logLevel": "VERBOSE",
+        "pid": 3088,
+        "tid": 3088,
+        "applicationId": "com.qualcomm.qti.devicestatisticsservice",
+        "processName": "com.qualcomm.qti.devicestatisticsservice",
+        "tag": "DeviceStatisticsService",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 180000000
+        }
+      },
+      "message": "chargerType\u003d1 batteryLevel\u003d1 totalBatteryCapacity\u003d515026304"
+    },
+    {
+      "header": {
+        "logLevel": "DEBUG",
+        "pid": 15639,
+        "tid": 15639,
+        "applicationId": "com.android.phone",
+        "processName": "com.android.phone",
+        "tag": "DynamicService",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 181000000
+        }
+      },
+      "message": " ACTION_BATTERY_CHANGED change,USB plug \u003d 1"
+    },
+    {
+      "header": {
+        "logLevel": "INFO",
+        "pid": 30610,
+        "tid": 30610,
+        "applicationId": "com.miui.securitycenter.remote",
+        "processName": "com.miui.securitycenter.remote",
+        "tag": "PowerSaveService",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 182000000
+        }
+      },
+      "message": "onReceive: android.intent.action.BATTERY_CHANGED"
+    },
+    {
+      "header": {
+        "logLevel": "INFO",
+        "pid": 30610,
+        "tid": 30610,
+        "applicationId": "com.miui.securitycenter.remote",
+        "processName": "com.miui.securitycenter.remote",
+        "tag": "PowerNoticeUI",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 183000000
+        }
+      },
+      "message": "handleBatteryChanged oldPlugType 1 mPlugType 1 oldBatteryLevel 1 mBatteryLevel 1 temperature 270"
+    },
+    {
+      "header": {
+        "logLevel": "INFO",
+        "pid": 30610,
+        "tid": 30610,
+        "applicationId": "com.miui.securitycenter.remote",
+        "processName": "com.miui.securitycenter.remote",
+        "tag": "ChargerBatteryIntelligenceReceiver",
+        "timestamp": {
+          "seconds": 1781515653,
+          "nanos": 183000000
+        }
+      },
+      "message": "onBatteryChanged temperature：27,plugType:1"
+    }
+  ]
+}

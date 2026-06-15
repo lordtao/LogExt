@@ -9,17 +9,15 @@ import com.intellij.ui.content.ContentFactory
 /**
  * Фабрика для создания боковой панели LogExt.
  */
-class LogCatToolWindowFactory : ToolWindowFactory {
+class LogExtToolWindowFactory : ToolWindowFactory {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val logCatPanel = LogExtPanel(project)
-        val content = ContentFactory.getInstance().createContent(logCatPanel, "LogExt", false)
-        
-        // Основная вкладка не должна закрываться
+        val logExtPanel = LogExtPanel(project)
+        val content = ContentFactory.getInstance().createContent(logExtPanel, "LogExt", false)
         content.isCloseable = false
-        
         toolWindow.contentManager.addContent(content)
-        Disposer.register(toolWindow.contentManager, logCatPanel)
+        
+        Disposer.register(toolWindow.contentManager, logExtPanel)
     }
 
     @Suppress("OVERRIDE_DEPRECATION")

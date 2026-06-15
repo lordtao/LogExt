@@ -11,7 +11,7 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
-import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
+import ua.at.tsvetkov.logext.services.LogExtGlobalSettingsService
 import java.awt.*
 import java.awt.event.ActionListener
 import javax.swing.*
@@ -21,7 +21,7 @@ import javax.swing.*
  */
 class LogSettingsDialog(project: Project) : DialogWrapper(project) {
 
-    private val globalSettings = LogCatGlobalSettingsService.getInstance()
+    private val globalSettings = LogExtGlobalSettingsService.getInstance()
     private val colorPanels = mutableMapOf<String, Pair<ColorPanel, ColorPanel>>()
     
     private val clearLogOnStartCheck = JBCheckBox("Clear log on application start", globalSettings.state.clearLogOnStart)

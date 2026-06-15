@@ -7,7 +7,7 @@ import com.intellij.openapi.wm.ToolWindowManager
 /**
  * Действие для открытия окна TAO LogExt из меню.
  */
-class OpenLogCatAction : AnAction() {
+class OpenLogExtAction : AnAction() {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return

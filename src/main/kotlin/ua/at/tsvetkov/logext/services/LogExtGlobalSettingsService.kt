@@ -10,8 +10,8 @@ import java.awt.Color
  * Глобальный сервис для хранения настроек плагина, общих для всех проектов.
  */
 @Service(Service.Level.APP)
-@State(name = "LogCatGlobalSettings", storages = [Storage("logext_global_settings.xml")])
-class LogCatGlobalSettingsService : PersistentStateComponent<LogCatGlobalSettingsService.State> {
+@State(name = "LogExtGlobalSettings", storages = [Storage("logext_global_settings.xml")])
+class LogExtGlobalSettingsService : PersistentStateComponent<LogExtGlobalSettingsService.State> {
 
     class State {
         var ignoredTags: MutableSet<String> = mutableSetOf()
@@ -93,7 +93,7 @@ class LogCatGlobalSettingsService : PersistentStateComponent<LogCatGlobalSetting
     }
 
     companion object {
-        fun getInstance(): LogCatGlobalSettingsService =
-            ApplicationManager.getApplication().getService(LogCatGlobalSettingsService::class.java)
+        fun getInstance(): LogExtGlobalSettingsService =
+            ApplicationManager.getApplication().getService(LogExtGlobalSettingsService::class.java)
     }
 }

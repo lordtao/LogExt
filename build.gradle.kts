@@ -6,12 +6,6 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.7.1"
 }
 
-val backNumber = 23
-
-val gitCommitNumber = providers.exec {
-    commandLine("git", "rev-list", "--count", "HEAD")
-}.standardOutput.asText.get().trim().toInt() - backNumber
-
 group = "ua.at.tsvetkov"
 version = "1.0.4"
 
@@ -42,9 +36,9 @@ intellijPlatform {
     pluginConfiguration {
         name = "TAO LogExt"
         ideaVersion {
-            // AI-261... соответствует 2026.1
-            sinceBuild = "261"
-            untilBuild = "271.*"
+            // AI-251... соответствует 2025.1
+            sinceBuild = "251"
+            untilBuild = ""
         }
 
         changeNotes = """

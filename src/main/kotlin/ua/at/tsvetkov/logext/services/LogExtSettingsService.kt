@@ -7,8 +7,8 @@ import com.intellij.openapi.project.Project
  * Сервис для сохранения настроек конкретного проекта (фильтры, история поиска).
  */
 @Service(Service.Level.PROJECT)
-@State(name = "LogCatSettings", storages = [Storage("logext_plugin_settings.xml")])
-class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.State> {
+@State(name = "LogExtSettings", storages = [Storage("logext_plugin_settings.xml")])
+class LogExtSettingsService : PersistentStateComponent<LogExtSettingsService.State> {
 
     class State {
         var selectedTags: Set<String>? = null
@@ -29,10 +29,6 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
         return myState.selectedTags?.contains(tag) ?: true
     }
 
-    /**
-     * Устанавливает состояние выбора тега.
-     * @param allKnownTags список всех известных тегов для инициализации множества, если оно было null (режим "Show All")
-     */
     fun setTagSelected(tag: String, selected: Boolean, allKnownTags: Collection<String>) {
         val currentTags = myState.selectedTags?.toMutableSet() ?: allKnownTags.toMutableSet()
         if (selected) {
@@ -48,6 +44,6 @@ class LogCatSettingsService : PersistentStateComponent<LogCatSettingsService.Sta
     }
 
     companion object {
-        fun getInstance(project: Project): LogCatSettingsService = project.getService(LogCatSettingsService::class.java)
+        fun getInstance(project: Project): LogExtSettingsService = project.getService(LogExtSettingsService::class.java)
     }
 }

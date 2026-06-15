@@ -9,7 +9,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.util.ui.FormBuilder
-import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
+import ua.at.tsvetkov.logext.services.LogExtGlobalSettingsService
 import java.awt.Dimension
 import java.io.File
 import javax.swing.JComponent
@@ -19,7 +19,7 @@ import javax.swing.JComponent
  */
 class LogExportDialog(private val project: Project) : DialogWrapper(project) {
 
-    private val globalSettings = LogCatGlobalSettingsService.getInstance()
+    private val globalSettings = LogExtGlobalSettingsService.getInstance()
     private val pathField = TextFieldWithBrowseButton()
     private val minimizeCheck = JBCheckBox("Minimize for AI", globalSettings.state.minimizeForAi)
 

@@ -1,131 +1,113 @@
 package ua.at.tsvetkov.logext.ui
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import java.awt.FlowLayout
 import java.awt.event.ActionListener
-import javax.swing.DefaultComboBoxModel
 import javax.swing.JButton
 import javax.swing.JPanel
+import com.intellij.openapi.util.IconLoader
 
 /**
- * Верхняя панель фильтрации (Устройство, Процесс, Фильтр тегов и Уровни).
+ * Заголовок панели фильтров.
  */
 class LogFilterHeader(
-    private val onDeviceChanged: (String?) -> Unit,
-    private val onProcessChanged: (String?) -> Unit,
-    private val onLevelsChanged: () -> Unit,
-    private val onTagFilterClicked: () -> Unit
+    val onDeviceChanged: (String?) -> Unit,
+    val onProcessChanged: (String?) -> Unit,
+    val onLevelsChanged: () -> Unit,
+    val onTagFilterClicked: () -> Unit,
 ) : JPanel(FlowLayout(FlowLayout.LEFT, 10, 5)) {
 
-    private val lampOn = IconLoader.getIcon("/icons/lamp_on.svg", javaClass)
-    private val lampOff = IconLoader.getIcon("/icons/lamp_off.svg", javaClass)
-
-    private val deviceModel = DefaultComboBoxModel<String>()
-    private val processModel = DefaultComboBoxModel<String>()
-
-    private val deviceCombo = ComboBox(deviceModel)
-    private val processCombo = ComboBox(processModel)
-
+    private val deviceCombo = ComboBox<String>()
+    private val processCombo = ComboBox<String>()
     private val levelChecks = mutableMapOf<String, JBCheckBox>()
+    private val tagFilterBtn = JButton("Tag filter")
 
-    private val tagFilterBtn = JButton("Tag filter", lampOff).apply {
-        toolTipText = "Tag filter"
-    }
+    private val lampOn = IconLoader.getIcon("/icons/lamp_on.svg", LogFilterHeader::class.java)
+    private val lampOff = IconLoader.getIcon("/icons/lamp_off.svg", LogFilterHeader::class.java)
 
     private var isUpdating = false
 
-    private val deviceListener = ActionListener {
-        if (!isUpdating) {
-            onDeviceChanged(deviceCombo.selectedItem as? String)
-        }
-    }
-
-    private val processListener = ActionListener {
-        if (!isUpdating) {
-            onProcessChanged(processCombo.selectedItem as? String)
-        }
-    }
-
     init {
-        border = JBUI.Borders.customLine(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground(), 0, 0, 1, 0)
+        border = JBUI.Borders.empty(2, 5)
 
         add(JBLabel("Device:"))
+        deviceCombo.addItem("Loading devices...")
+        deviceCombo.addActionListener { 
+            if (!isUpdating) onDeviceChanged(getSelectedDevice()) 
+        }
         add(deviceCombo)
 
         add(JBLabel("Process:"))
+        processCombo.addItem("All Processes")
+        processCombo.addActionListener { 
+            if (!isUpdating) onProcessChanged(getSelectedProcess()) 
+        }
         add(processCombo)
 
-        deviceCombo.addActionListener(deviceListener)
-        processCombo.addActionListener(processListener)
-
-        tagFilterBtn.addActionListener { onTagFilterClicked() }
         add(tagFilterBtn)
+        tagFilterBtn.icon = lampOff
+        tagFilterBtn.addActionListener { onTagFilterClicked() }
 
         add(JBLabel("Levels:"))
-        listOf("V", "D", "I", "W", "E", "A").forEach { level ->
-            val checkBox = JBCheckBox(level, true)
-            checkBox.addActionListener { if (!isUpdating) onLevelsChanged() }
-            levelChecks[level] = checkBox
-            add(checkBox)
+        val levels = listOf("V", "D", "I", "W", "E", "A")
+        val listener = ActionListener { onLevelsChanged() }
+        levels.forEach { level ->
+            val cb = JBCheckBox(level, true)
+            cb.addActionListener(listener)
+            levelChecks[level] = cb
+            add(cb)
         }
+    }
 
-        deviceModel.addElement("Loading devices...")
-        processModel.addElement("All Processes")
+    fun hideDeviceAndProcessSelectors() {
+        deviceCombo.isVisible = false
+        processCombo.isVisible = false
+        components.filterIsInstance<JBLabel>().forEach { 
+            if ((it.text == "Device:") || (it.text == "Process:")) it.isVisible = false
+        }
     }
 
     fun updateDevices(devices: List<String>) {
+        val selected = getSelectedDevice()
         isUpdating = true
-        val current = deviceCombo.selectedItem as? String
-        deviceModel.removeAllElements()
-        devices.forEach { deviceModel.addElement(it) }
-        if (current != null && devices.contains(current)) {
-            deviceCombo.selectedItem = current
-        } else if (devices.isNotEmpty()) {
-            deviceCombo.selectedIndex = 0
+        try {
+            deviceCombo.removeAllItems()
+            if (devices.isEmpty()) {
+                deviceCombo.addItem("No devices")
+            } else {
+                devices.forEach { deviceCombo.addItem(it) }
+                if (selected != null && devices.contains(selected)) {
+                    deviceCombo.selectedItem = selected
+                }
+            }
+        } finally {
+            isUpdating = false
         }
-        isUpdating = false
     }
 
-    fun updateProcesses(processes: List<String>, preferredProcess: String? = null) {
+    fun updateProcesses(processes: List<String>, preferred: String? = null) {
+        val selected = preferred ?: getSelectedProcess()
         isUpdating = true
-        val current = processCombo.selectedItem as? String
-        processModel.removeAllElements()
-        processModel.addElement("All Processes")
-        processes.forEach { processModel.addElement(it) }
-
-        when {
-            current != null && (processes.contains(current) || current == "All Processes") -> {
-                processCombo.selectedItem = current
+        try {
+            processCombo.removeAllItems()
+            processCombo.addItem("All Processes")
+            processes.forEach { processCombo.addItem(it) }
+            if (selected != null && (processes.contains(selected) || selected == "All Processes")) {
+                processCombo.selectedItem = selected
             }
-            preferredProcess != null && processes.contains(preferredProcess) -> {
-                processCombo.selectedItem = preferredProcess
-            }
-            processes.isNotEmpty() -> {
-                processCombo.selectedItem = processes[0]
-            }
-            else -> {
-                processCombo.selectedItem = "All Processes"
-            }
+        } finally {
+            isUpdating = false
         }
-        isUpdating = false
     }
-
-    fun getSelectedProcess(): String? = processCombo.selectedItem as? String
 
     fun getSelectedDevice(): String? = deviceCombo.selectedItem as? String
+    fun getSelectedProcess(): String? = processCombo.selectedItem as? String
+    fun isLevelSelected(level: String): Boolean = levelChecks[level]?.isSelected ?: true
 
-    fun isLevelSelected(levelChar: String): Boolean = levelChecks[levelChar]?.isSelected ?: true
-
-    /**
-     * Обновляет иконку кнопки фильтра в зависимости от активности фильтрации.
-     * @param isActive true, если часть тегов отфильтрована (выключена).
-     */
-    fun setTagFilterActive(isActive: Boolean) {
-        tagFilterBtn.icon = if (isActive) lampOn else lampOff
+    fun setTagFilterActive(active: Boolean) {
+        tagFilterBtn.icon = if (active) lampOn else lampOff
     }
 }

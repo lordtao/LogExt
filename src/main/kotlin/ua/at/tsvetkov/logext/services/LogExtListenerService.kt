@@ -6,10 +6,10 @@ import com.intellij.openapi.project.Project
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Сервис для управления подпиской на логи Android LogCat.
+ * Сервис для управления подпиской на логи Android LogExt.
  */
 @Service(Service.Level.PROJECT)
-class LogCatListenerService(private val project: Project) : Disposable {
+class LogExtListenerService(private val project: Project) : Disposable {
 
     private var logcatThread: Thread? = null
     private var isDisposed = false
@@ -42,9 +42,6 @@ class LogCatListenerService(private val project: Project) : Disposable {
         deviceChangeListeners.add(listener)
     }
 
-    /**
-     * Возвращает список имен подключенных устройств.
-     */
     fun getConnectedDevices(): List<String> {
         return try {
             val adbClass = Class.forName("com.android.ddmlib.AndroidDebugBridge")
@@ -58,9 +55,6 @@ class LogCatListenerService(private val project: Project) : Disposable {
         }
     }
 
-    /**
-     * Возвращает карту PID -> ProcessName для указанного устройства.
-     */
     fun getProcessList(deviceName: String?): Map<String, String> {
         if (deviceName == null || deviceName == "Loading devices...") return emptyMap()
         return try {
@@ -92,9 +86,6 @@ class LogCatListenerService(private val project: Project) : Disposable {
         }
     }
 
-    /**
-     * Запускает прослушивание логов для конкретного устройства.
-     */
     fun startListening(deviceName: String?, callback: (String) -> Unit) {
         stopListening()
         

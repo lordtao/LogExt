@@ -1,6 +1,6 @@
 package ua.at.tsvetkov.logext.ui.logic
 
-import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
+import ua.at.tsvetkov.logext.services.LogExtGlobalSettingsService
 
 /**
  * Класс для форматирования строк лога согласно настройкам отображения.
@@ -9,7 +9,7 @@ class LogFormatter {
 
     fun format(
         parsed: LogParser.ParsedLine,
-        state: LogCatGlobalSettingsService.State,
+        state: LogExtGlobalSettingsService.State,
         isDuplicate: Boolean,
     ): String {
         if (!state.showDuplicateTags && isDuplicate) {

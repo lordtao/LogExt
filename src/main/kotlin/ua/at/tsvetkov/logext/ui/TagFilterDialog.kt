@@ -19,8 +19,8 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import ua.at.tsvetkov.logext.models.TagInfo
-import ua.at.tsvetkov.logext.services.LogCatGlobalSettingsService
-import ua.at.tsvetkov.logext.services.LogCatSettingsService
+import ua.at.tsvetkov.logext.services.LogExtGlobalSettingsService
+import ua.at.tsvetkov.logext.services.LogExtSettingsService
 import java.awt.*
 import java.io.File
 import javax.swing.*
@@ -34,8 +34,8 @@ class TagFilterDialog(
     private val allTags: List<TagInfo>
 ) : DialogWrapper(project) {
 
-    private val settings = LogCatSettingsService.getInstance(project)
-    private val globalSettings = LogCatGlobalSettingsService.getInstance()
+    private val settings = LogExtSettingsService.getInstance(project)
+    private val globalSettings = LogExtGlobalSettingsService.getInstance()
     private val workingTags = allTags.toMutableList()
     private val ignoredTagsSet = globalSettings.state.ignoredTags.toMutableSet()
 
@@ -357,7 +357,7 @@ class TagFilterDialog(
         listPanel.layout = BoxLayout(listPanel, BoxLayout.Y_AXIS)
 
         groupTags.forEach { tagName ->
-            val row = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
+            val row = JPanel(BorderLayout())
             row.maximumSize = Dimension(Int.MAX_VALUE, 32)
             row.border = JBUI.Borders.empty(1, 0)
 
@@ -371,12 +371,12 @@ class TagFilterDialog(
                 ignoredTagsSet.remove(tagName)
                 updatePanels()
             }
-            row.add(restoreBtn)
+            row.add(restoreBtn, BorderLayout.WEST)
 
             val label = JBLabel(tagName).apply {
                 border = JBUI.Borders.emptyLeft(5)
             }
-            row.add(label)
+            row.add(label, BorderLayout.CENTER)
 
             ignoredComponents[tagName] = row
             listPanel.add(row)

@@ -21,6 +21,7 @@
             <li><b>Multi-tag Search:</b> Filter by multiple tag names simultaneously using spaces or new lines.</li>
             <li><b>AI Integration:</b> Instant log analysis using Gemini AI Agent (Studio Bot) directly from the context menu.</li>
             <li><b>Log Export (AI Optimized):</b> Save filtered optimazing logs to a file, reducing token consumption when using external AI models for analysis.</li>
+            <li><b>Static Log Import:</b> Import and analyze <code>.logcat</code> files from LogCat in separate tabs with full filtering support.</li>
             <li><b>Superior Performance:</b> High-speed buffering (100ms updates) ensures IDE responsiveness even during heavy logging.</li>
             <li><b>Custom Coloring:</b> Fully customizable foreground and background colors for every log level.</li>
             <li><b>Readability:</b> Option to hide duplicate metadata (Date, Time, PID, Tag) in consecutive lines.</li>
@@ -32,6 +33,7 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>Added Static Log Import: analyze <code>.logcat</code> files from LogCat in separate tabs.</li>
             <li>Added global "Ignored Tags" blacklist across all projects.</li>
             <li>Implemented high-speed log buffering to prevent IDE freezes.</li>
             <li>Integrated Gemini AI for log explanation.</li>
@@ -54,12 +56,13 @@
                     secondary="false"
                     icon="/icons/toolWindowIcon.svg"
                     anchor="bottom"
+                    canCloseContents="true"
                     factoryClass="ua.at.tsvetkov.logext.ui.LogCatToolWindowFactory"/>
     </extensions>
 
     <actions>
         <action id="ua.at.tsvetkov.logext.actions.OpenLogCatAction"
-                class="ua.at.tsvetkov.logext.actions.OpenLogCatAction"
+                class="ua.at.tsvetkov.logext.actions.OpenLogExtAction"
                 text="TAO LogExt"
                 icon="/icons/toolWindowIcon.svg"
                 description="Open TAO LogExt Tool Window">
