@@ -38,7 +38,7 @@ intellijPlatform {
         ideaVersion {
             // AI-251... соответствует 2025.1
             sinceBuild = "251"
-            untilBuild = ""
+            untilBuild = "271.*"
         }
 
         changeNotes = """
