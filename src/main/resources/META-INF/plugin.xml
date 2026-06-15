@@ -24,6 +24,7 @@
             <li><b>Superior Performance:</b> High-speed buffering (100ms updates) ensures IDE responsiveness even during heavy logging.</li>
             <li><b>Custom Coloring:</b> Fully customizable foreground and background colors for every log level.</li>
             <li><b>Readability:</b> Option to hide duplicate metadata (Date, Time, PID, Tag) in consecutive lines.</li>
+            <li><b>Tags Preset:</b> Save/load tags presets.</li>
             <li><b>Source Navigation:</b> Clickable links for <code>FileName.kt:Line</code> patterns.</li>
             <li><b>Workflow Automation:</b> Auto-focus on app start and process persistence.</li>
         </ul>
