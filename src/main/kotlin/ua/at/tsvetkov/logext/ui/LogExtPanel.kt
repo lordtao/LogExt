@@ -443,7 +443,16 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }
         tagInfo.isPresentInCurrentLog = true
         if (isAppTag) tagInfo.isApplicationTag = true
-        if (isNewTag) updateTagFilterIndicator()
+        
+        if (isNewTag) {
+            // Если у нас уже есть набор выбранных тегов, добавляем туда новый как активный
+            settings.state.selectedTags?.let {
+                val updatedTags = it.toMutableSet()
+                updatedTags.add(tagName)
+                settings.setSelectedTags(updatedTags)
+            }
+            updateTagFilterIndicator()
+        }
 
         if (settings.state.selectedTags?.contains(tagName) != false) {
             val attrs = globalSettings.getLevelAttributes(levelChar)

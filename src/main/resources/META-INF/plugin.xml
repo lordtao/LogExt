@@ -36,6 +36,7 @@
             <li>Added Preset history for quick change.</li>
             <li>UI improvements.</li>
             <li>Log string context menu fix.</li>
+            <li>As new tags appear, they are added to the list of tags as enabled.</li>
         </ul>
     ]]></change-notes>
 
