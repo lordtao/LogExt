@@ -17,8 +17,8 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VfsUtilCore
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.ui.EditorNotificationPanel
 import com.intellij.ui.content.ContentFactory
 import ua.at.tsvetkov.logext.models.TagInfo
 import ua.at.tsvetkov.logext.services.LogExtGlobalSettingsService
@@ -74,6 +74,13 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private var filterHeader: LogFilterHeader? = null
     private var currentDevice: String? = null
     private var lastMetadata: String? = null
+    
+    private var isPaused = false
+    private val notificationPanel = EditorNotificationPanel(EditorNotificationPanel.Status.Warning).apply {
+        text = "Logcat is paused"
+        createActionLabel("Resume") { resumeLogs() }
+        isVisible = false
+    }
 
     private val logBuffer = ConcurrentLinkedQueue<LogItem>()
     private val bufferTimer: Timer
@@ -100,8 +107,12 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         )
         filterHeader = header
 
+        val centerPanel = JPanel(BorderLayout())
+        centerPanel.add(notificationPanel, BorderLayout.NORTH)
+        centerPanel.add(consoleView.component, BorderLayout.CENTER)
+
         add(header, BorderLayout.NORTH)
-        add(consoleView.component, BorderLayout.CENTER)
+        add(centerPanel, BorderLayout.CENTER)
         createToolbar()
         Disposer.register(this, consoleView)
 
@@ -110,6 +121,12 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
         initAdb()
         setupAdbTimers(header)
+    }
+
+    private fun resumeLogs() {
+        isPaused = false
+        notificationPanel.isVisible = false
+        reFilterHistory()
     }
 
     private fun initAdb() {
@@ -340,7 +357,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     private fun flushBuffer() {
-        if (logBuffer.isEmpty()) return
+        if (logBuffer.isEmpty() || isPaused) return
         ApplicationManager.getApplication().invokeLater {
             val console = consoleView as? ConsoleViewImpl ?: return@invokeLater
             val editor = console.editor
@@ -541,6 +558,22 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private fun createToolbar() {
         val actionGroup = DefaultActionGroup()
         
+        actionGroup.add(object : ToggleAction("Pause/Resume", "Pause or resume Logcat stream", AllIcons.Actions.Pause) {
+            override fun isSelected(e: AnActionEvent): Boolean = isPaused
+            override fun setSelected(e: AnActionEvent, state: Boolean) {
+                isPaused = state
+                notificationPanel.isVisible = isPaused
+                if (!isPaused) resumeLogs()
+            }
+            override fun update(e: AnActionEvent) {
+                super.update(e)
+                e.presentation.icon = if (isPaused) AllIcons.Actions.Resume else AllIcons.Actions.Pause
+            }
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        })
+
+        actionGroup.addSeparator()
+
         actionGroup.add(object : AnAction("Import Log", "Import LogCat from file", AllIcons.ToolbarDecorator.Import) {
             override fun actionPerformed(e: AnActionEvent) {
                 val descriptor = FileChooserDescriptor(true, false, false, false, false, false).apply {
