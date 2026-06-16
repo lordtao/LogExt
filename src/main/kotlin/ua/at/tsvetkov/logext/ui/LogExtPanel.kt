@@ -342,19 +342,26 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private fun flushBuffer() {
         if (logBuffer.isEmpty()) return
         ApplicationManager.getApplication().invokeLater {
-            val editor = (consoleView as? ConsoleViewImpl)?.editor
+            val console = consoleView as? ConsoleViewImpl ?: return@invokeLater
+            val editor = console.editor
             val scrollingModel = editor?.scrollingModel
-            val oldOffset = scrollingModel?.verticalScrollOffset ?: 0
+            val isAtBottom = if (scrollingModel != null) {
+                val verticalScrollOffset = scrollingModel.verticalScrollOffset
+                val visibleHeight = scrollingModel.visibleArea.height
+                val totalHeight = editor.contentComponent.height
+                totalHeight - (verticalScrollOffset + visibleHeight) < 50
+            } else true
 
             var item = logBuffer.poll()
             while (item != null) {
                 if (item.tagName != null) processParsedMessage(item.message, item.tagName, item.levelChar, item.isAppTag)
-                else consoleView.print(item.message + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
+                else console.print(item.message + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
                 item = logBuffer.poll()
             }
             
-            if (globalSettings.state.isAutoScroll) (consoleView as ConsoleViewImpl).scrollToEnd()
-            else scrollingModel?.scrollVertically(oldOffset)
+            if (globalSettings.state.isAutoScroll && isAtBottom) {
+                console.scrollToEnd()
+            }
         }
     }
 
