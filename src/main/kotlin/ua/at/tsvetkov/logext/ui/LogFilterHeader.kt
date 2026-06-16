@@ -9,6 +9,7 @@ import java.awt.event.ActionListener
 import javax.swing.JButton
 import javax.swing.JPanel
 import com.intellij.openapi.util.IconLoader
+import javax.swing.DefaultComboBoxModel
 
 /**
  * Заголовок панели фильтров.
@@ -41,7 +42,7 @@ class LogFilterHeader(
         add(deviceCombo)
 
         add(JBLabel("Process:"))
-        processCombo.addItem("All Processes")
+        processCombo.model = DefaultComboBoxModel<String>(arrayOf("All Processes"))
         processCombo.addActionListener { 
             if (!isUpdating) onProcessChanged(getSelectedProcess()) 
         }
@@ -88,15 +89,38 @@ class LogFilterHeader(
         }
     }
 
+    /**
+     * Обновляет список процессов без "прыжков" и потери выбора.
+     */
     fun updateProcesses(processes: List<String>, preferred: String? = null) {
-        val selected = preferred ?: getSelectedProcess()
+        val newItems = listOf("All Processes") + processes
+        val model = processCombo.model as DefaultComboBoxModel<String>
+        
+        // Проверяем, изменился ли состав списка
+        val currentItems = (0 until model.size).map { model.getElementAt(it) }
+        if (currentItems == newItems) {
+            // Если список тот же, просто проверяем синхронизацию выбора
+            val currentSelected = processCombo.selectedItem as? String
+            if (preferred != null && currentSelected != preferred && newItems.contains(preferred)) {
+                isUpdating = true
+                processCombo.selectedItem = preferred
+                isUpdating = false
+            }
+            return
+        }
+
+        // Если список изменился, обновляем его максимально аккуратно
+        val savedSelected = preferred ?: getSelectedProcess()
+        
         isUpdating = true
         try {
-            processCombo.removeAllItems()
-            processCombo.addItem("All Processes")
-            processes.forEach { processCombo.addItem(it) }
-            if (selected != null && (processes.contains(selected) || selected == "All Processes")) {
-                processCombo.selectedItem = selected
+            model.removeAllElements()
+            newItems.forEach { model.addElement(it) }
+            
+            if (savedSelected != null && newItems.contains(savedSelected)) {
+                processCombo.selectedItem = savedSelected
+            } else {
+                processCombo.selectedItem = "All Processes"
             }
         } finally {
             isUpdating = false

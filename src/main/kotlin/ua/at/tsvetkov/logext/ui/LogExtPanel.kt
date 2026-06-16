@@ -6,14 +6,7 @@ import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.ActionGroup
-import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.ActionPlaces
-import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.DefaultActionGroup
-import com.intellij.openapi.actionSystem.ToggleAction
+import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
@@ -24,6 +17,7 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.content.ContentFactory
 import ua.at.tsvetkov.logext.models.TagInfo
@@ -132,14 +126,14 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         Timer(5000) {
             val devices = listenerService.getConnectedDevices()
             header.updateDevices(devices)
-
+            
             val activeDevice = header.getSelectedDevice()
             if ((activeDevice != null) && (activeDevice != "Loading devices...")) {
                 val adbProcesses = listenerService.getProcessList(activeDevice)
                 var processesChanged = false
                 val selectedPackage = header.getSelectedProcess()
                 var currentSelectedPidChanged = false
-
+                
                 if (adbProcesses.isNotEmpty()) {
                     val currentPids = adbProcesses.keys
                     val pidsToRemove = processManager.getPids().filter { it !in currentPids }
@@ -160,7 +154,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 }
 
                 if (processesChanged || (header.getSelectedProcess() == "All Processes") || (header.getSelectedProcess() == null)) {
-                    header.updateProcesses(processManager.getAllPackages(), settings.state.lastSelectedProcess)
+                    header.updateProcesses(processManager.getAllPackages(), header.getSelectedProcess())
                     if (currentSelectedPidChanged && (selectedPackage != "All Processes")) reFilterHistory()
                     updateTagFilterIndicator()
                 }
@@ -173,11 +167,11 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 val activeDevice = header.getSelectedDevice() ?: devices[0]
                 currentDevice = activeDevice
                 restartListening(activeDevice)
-
+                
                 val adbProcesses = listenerService.getProcessList(activeDevice)
                 if (adbProcesses.isNotEmpty()) {
                     adbProcesses.forEach { (pid, pkg) -> processManager.updateProcess(pid, pkg) }
-                    header.updateProcesses(processManager.getAllPackages(), settings.state.lastSelectedProcess)
+                    header.updateProcesses(processManager.getAllPackages(), header.getSelectedProcess())
                 }
                 updateTagFilterIndicator()
             }
@@ -186,24 +180,17 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private fun setupContextMenu(editor: Editor?) {
         editor?.contentComponent?.addMouseListener(object : java.awt.event.MouseAdapter() {
-            override fun mousePressed(e: java.awt.event.MouseEvent) {
-                if (e.isPopupTrigger) showPopupMenu(e)
-            }
-
-            override fun mouseReleased(e: java.awt.event.MouseEvent) {
-                if (e.isPopupTrigger) showPopupMenu(e)
-            }
-
+            override fun mousePressed(e: java.awt.event.MouseEvent) { if (e.isPopupTrigger) showPopupMenu(e) }
+            override fun mouseReleased(e: java.awt.event.MouseEvent) { if (e.isPopupTrigger) showPopupMenu(e) }
             private fun showPopupMenu(e: java.awt.event.MouseEvent) {
                 val group = DefaultActionGroup()
                 addCustomContextActions(group)
                 group.addSeparator()
                 val standardGroup = ActionManager.getInstance().getAction(ActionPlaces.EDITOR_POPUP) as? ActionGroup
                 if (standardGroup != null) {
-                    val children = standardGroup.getChildren(null)
-                    group.addAll(*children)
+                    group.addAll(standardGroup)
                 }
-                val popupMenu = ActionManager.getInstance().createActionPopupMenu("LogCatPopup", group)
+                val popupMenu = ActionManager.getInstance().createActionPopupMenu("LogExtPopup", group)
                 popupMenu.component.show(e.component, e.x, e.y)
             }
         })
@@ -218,9 +205,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
         if (selectedText != null) {
             group.add(object : AnAction("Copy Selection", null, AllIcons.Actions.Copy) {
-                override fun actionPerformed(e: AnActionEvent) {
-                    CopyPasteManager.getInstance().setContents(StringSelection(selectedText))
-                }
+                override fun actionPerformed(e: AnActionEvent) { CopyPasteManager.getInstance().setContents(StringSelection(selectedText)) }
             })
         }
 
@@ -272,9 +257,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
         group.addSeparator()
         group.add(object : AnAction("Clear Log", null, AllIcons.Actions.GC) {
-            override fun actionPerformed(e: AnActionEvent) {
-                clearAllLogs()
-            }
+            override fun actionPerformed(e: AnActionEvent) { clearAllLogs() }
         })
     }
 
@@ -285,31 +268,23 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             val api = companion.javaClass.getMethod("getInstance").invoke(companion)
             val requestSourceClass = Class.forName("com.android.tools.idea.gemini.GeminiPluginApi\$RequestSource")
             val logcatSource = requestSourceClass.getField("LOGCAT").get(null)
-            val stageChatQueryMethod =
-                api.javaClass.getMethod("stageChatQuery", Project::class.java, String::class.java, requestSourceClass)
+            val stageChatQueryMethod = api.javaClass.getMethod("stageChatQuery", Project::class.java, String::class.java, requestSourceClass)
             stageChatQueryMethod.invoke(api, project, query, logcatSource)
             true
-        } catch (_: Exception) {
-            false
-        }
+        } catch (_: Exception) { false }
     }
 
     private fun getLineAtCaret(editor: Editor): String? {
         val document = editor.document
         val lineIndex = editor.caretModel.logicalPosition.line
         if (lineIndex < 0 || lineIndex >= document.lineCount) return null
-        return document.getText(
-            com.intellij.openapi.util.TextRange(
-                document.getLineStartOffset(lineIndex), document.getLineEndOffset(lineIndex)
-            )
-        )
+        return document.getText(com.intellij.openapi.util.TextRange(document.getLineStartOffset(lineIndex), document.getLineEndOffset(lineIndex)))
     }
 
     private fun updateTagFilterIndicator() {
         ApplicationManager.getApplication().executeOnPooledThread {
             val initialTags = getFilteredTagsForCurrentProcess()
-            val isFilterActive =
-                initialTags.any { !it.isSelected && it.isPresentInCurrentLog && !globalSettings.isTagIgnored(it.name) }
+            val isFilterActive = initialTags.any { !it.isSelected && it.isPresentInCurrentLog && !globalSettings.isTagIgnored(it.name) }
             ApplicationManager.getApplication().invokeLater { filterHeader?.setTagFilterActive(isFilterActive) }
         }
     }
@@ -323,13 +298,11 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
             var item = logBuffer.poll()
             while (item != null) {
-                if (item.tagName != null) processParsedMessage(
-                    item.message, item.tagName, item.levelChar, item.isAppTag
-                )
+                if (item.tagName != null) processParsedMessage(item.message, item.tagName, item.levelChar, item.isAppTag)
                 else consoleView.print(item.message + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
                 item = logBuffer.poll()
             }
-
+            
             if (autoScrollToEnd) (consoleView as ConsoleViewImpl).scrollToEnd()
             else scrollingModel?.scrollVertically(oldOffset)
         }
@@ -382,8 +355,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     if (globalSettings.state.openOnStart) {
                         Timer(1000) {
                             ApplicationManager.getApplication().invokeLater {
-                                val toolWindowManager = ToolWindowManager.getInstance(project)
-                                val tw = toolWindowManager.getToolWindow("TAO LogExt")
+                                val tw = ToolWindowManager.getInstance(project).getToolWindow("TAO LogExt")
                                 if (tw != null && !tw.isVisible) tw.show() else tw?.activate(null)
                             }
                         }.apply { isRepeats = false }.start()
@@ -391,9 +363,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 }
             } else if (isNewPid) {
                 ApplicationManager.getApplication().invokeLater {
-                    header.updateProcesses(
-                        processManager.getAllPackages(), settings.state.lastSelectedProcess ?: it.packageName
-                    )
+                    header.updateProcesses(processManager.getAllPackages(), header.getSelectedProcess())
                 }
             }
         }
@@ -401,8 +371,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val selectedProcess = header.getSelectedProcess()
         var isAppLine = false
         if (selectedProcess != null && (selectedProcess != "All Processes")) {
-            if (parsed?.pid != null && processManager.getPackageByPidChecked(parsed.pid, selectedProcess)) isAppLine =
-                true
+            if (parsed?.pid != null && processManager.getPackageByPidChecked(parsed.pid, selectedProcess)) isAppLine = true
             if (processInfo == null && !isAppLine) return
         }
 
@@ -416,7 +385,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         if (parsed != null) {
             if (header.isLevelSelected(parsed.level)) {
                 val isTagFromApp = isAppLine || (parsed.pid == parsed.tid)
-                val formattedLine = formatter.format(parsed, globalSettings.state, lastMetadata == parsed.metadata)
+                val formattedLine = formatter.format(parsed, globalSettings.state, isDuplicate = (lastMetadata == parsed.metadata))
                 logBuffer.add(LogItem(formattedLine, parsed.level, parsed.tag, isTagFromApp))
                 lastMetadata = parsed.metadata
             }
@@ -459,22 +428,17 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 if (parsed != null) {
                     if (globalSettings.isTagIgnored(parsed.tag)) return@forEach
                     val selectedProcess = header.getSelectedProcess()
-                    val targetPid = if (selectedProcess != null && (selectedProcess != "All Processes")) {
-                        processManager.findPidByPackage(selectedProcess)
-                    } else null
+                    val targetPid = if (selectedProcess != null && (selectedProcess != "All Processes")) processManager.findPidByPackage(selectedProcess) else null
                     if (targetPid != null && (parsed.pid != targetPid)) return@forEach
-
+                    
                     if (header.isLevelSelected(parsed.level)) {
                         val isTagFromApp = (targetPid != null) || (parsed.pid == parsed.tid)
-                        val formattedLine =
-                            formatter.format(parsed, globalSettings.state, lastMetadata == parsed.metadata)
+                        val formattedLine = formatter.format(parsed, globalSettings.state, isDuplicate = (lastMetadata == parsed.metadata))
                         processParsedMessage(formattedLine, parsed.tag, parsed.level, isTagFromApp)
                         lastMetadata = parsed.metadata
                     }
                 } else if (header.getSelectedProcess() == null || (header.getSelectedProcess() == "All Processes")) {
-                    if (settings.state.selectedTags == null) consoleView.print(
-                        message + "\n", ConsoleViewContentType.NORMAL_OUTPUT
-                    )
+                    if (settings.state.selectedTags == null) consoleView.print(message + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
                 }
             }
         }
@@ -484,67 +448,35 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val selectedProcess = filterHeader?.getSelectedProcess()
         val currentProcessTags = mutableSetOf<String>()
         val historyCopy = synchronized(rawLogsHistory) { rawLogsHistory.toList() }
-        val targetPid = if (selectedProcess != null && (selectedProcess != "All Processes")) {
-            processManager.findPidByPackage(selectedProcess)
-        } else null
+        val targetPid = if (selectedProcess != null && (selectedProcess != "All Processes")) processManager.findPidByPackage(selectedProcess) else null
 
         historyCopy.forEach { message ->
             val parsed = parser.parse(message)
             if (parsed != null && ((targetPid == null) || (parsed.pid == targetPid))) currentProcessTags.add(parsed.tag)
         }
 
-        val filteredTags =
-            allTags.values.asSequence().filter { it.name in currentProcessTags || settings.isTagSelected(it.name) }
-                .toMutableList()
+        val filteredTags = allTags.values.asSequence().filter { it.name in currentProcessTags || settings.isTagSelected(it.name) }.toMutableList()
         filteredTags.forEach { it.isPresentInCurrentLog = it.name in currentProcessTags }
         return filteredTags.sortedBy { it.name }
     }
 
     private fun createToolbar() {
         val actionGroup = DefaultActionGroup()
-
-        actionGroup.addSeparator()
-        actionGroup.add(object : AnAction("Clear All", null, AllIcons.Actions.GC) {
-            override fun actionPerformed(e: AnActionEvent) {
-                clearAllLogs()
-            }
-        })
-        actionGroup.addSeparator()
-
-        actionGroup.add(object : ToggleAction("Scroll to the End", null, AllIcons.RunConfigurations.Scroll_down) {
-            override fun isSelected(e: AnActionEvent): Boolean = autoScrollToEnd
-            override fun setSelected(e: AnActionEvent, state: Boolean) {
-                autoScrollToEnd = state
-                if (state) (consoleView as ConsoleViewImpl).scrollToEnd()
-            }
-
-            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
-        })
-
-        actionGroup.add(object : ToggleAction("Soft-Wrap", null, AllIcons.Actions.ToggleSoftWrap) {
-            override fun isSelected(e: AnActionEvent): Boolean =
-                (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps ?: false
-
-            override fun setSelected(e: AnActionEvent, state: Boolean) {
-                (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps = state
-            }
-
-            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
-        })
-
-        actionGroup.addSeparator()
-        actionGroup.add(object : AnAction("Copy Log", null, AllIcons.Actions.Copy) {
-            override fun actionPerformed(e: AnActionEvent) {
-                CopyPasteManager.getInstance().setContents(StringSelection((consoleView as ConsoleViewImpl).text))
-            }
-        })
-
+        
         actionGroup.add(object : AnAction("Import Log", "Import LogCat from file", AllIcons.ToolbarDecorator.Import) {
             override fun actionPerformed(e: AnActionEvent) {
-                val descriptor = FileChooserDescriptor(true, false, false, false, false, false).apply {
-                    title = "Import LogCat File"
+                // ЖЕСТКИЙ ФИЛЬТР ЧЕРЕЗ ПЕРЕОПРЕДЕЛЕНИЕ МЕТОДОВ
+                val descriptor = object : FileChooserDescriptor(true, false, false, false, false, false) {
+                    override fun isFileVisible(file: VirtualFile?, showHiddenFiles: Boolean): Boolean {
+                        if (file != null && file.isDirectory) return true
+                        return file?.name?.lowercase()?.endsWith(".logcat") == true
+                    }
+                    override fun isFileSelectable(file: VirtualFile?): Boolean {
+                        return file?.name?.lowercase()?.endsWith(".logcat") == true
+                    }
+                }.apply {
+                    title = "Import LogExt File"
                     description = "Choose a .logcat file to analyze"
-                    withExtensionFilter("Logcat files", "logcat")
                 }
 
                 val virtualFile = FileChooser.chooseFile(descriptor, project, null)
@@ -552,8 +484,10 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     val logFile = VfsUtilCore.virtualToIoFile(it)
                     val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("TAO LogExt") ?: return
                     val importedPanel = LogImportedPanel(project, logFile)
-
+                    
                     val content = ContentFactory.getInstance().createContent(importedPanel, logFile.name, false)
+                    
+                    // ЯВНО РАЗРЕШАЕМ ЗАКРЫТИЕ
                     content.isCloseable = true
 
                     toolWindow.contentManager.addContent(content)
@@ -562,24 +496,44 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 }
             }
         })
+        
+        actionGroup.addSeparator()
+        actionGroup.add(object : AnAction("Clear All", null, AllIcons.Actions.GC) { override fun actionPerformed(e: AnActionEvent) { clearAllLogs() } })
+        actionGroup.addSeparator()
+
+        actionGroup.add(object : ToggleAction("Scroll to the End", null, AllIcons.RunConfigurations.Scroll_down) {
+            override fun isSelected(e: AnActionEvent): Boolean = autoScrollToEnd
+            override fun setSelected(e: AnActionEvent, state: Boolean) {
+                autoScrollToEnd = state
+                if (state) (consoleView as ConsoleViewImpl).scrollToEnd()
+            }
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        })
+
+        actionGroup.add(object : ToggleAction("Soft-Wrap", null, AllIcons.Actions.ToggleSoftWrap) {
+            override fun isSelected(e: AnActionEvent): Boolean = (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps ?: false
+            override fun setSelected(e: AnActionEvent, state: Boolean) { (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps = state }
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        })
+
+        actionGroup.addSeparator()
+        actionGroup.add(object : AnAction("Copy Log", null, AllIcons.Actions.Copy) {
+            override fun actionPerformed(e: AnActionEvent) { CopyPasteManager.getInstance().setContents(StringSelection((consoleView as ConsoleViewImpl).text)) }
+        })
 
         actionGroup.add(object : AnAction("Save Log", null, AllIcons.Actions.MenuSaveall) {
             override fun actionPerformed(e: AnActionEvent) {
                 val dialog = LogExportDialog(project)
                 if (dialog.showAndGet()) {
                     val path = dialog.getExportPath()
-                    if (path.isNotEmpty()) exporter.export(
-                        File(path), (consoleView as ConsoleViewImpl).text, dialog.isMinimizeForAi()
-                    )
+                    if (path.isNotEmpty()) exporter.export(File(path), (consoleView as ConsoleViewImpl).text, dialog.isMinimizeForAi())
                 }
             }
         })
 
         actionGroup.addSeparator()
         actionGroup.add(object : AnAction("Settings", null, AllIcons.General.Settings) {
-            override fun actionPerformed(e: AnActionEvent) {
-                if (LogSettingsDialog(project).showAndGet()) reFilterHistory()
-            }
+            override fun actionPerformed(e: AnActionEvent) { if (LogSettingsDialog(project).showAndGet()) reFilterHistory() }
         })
 
         val toolbar = ActionManager.getInstance().createActionToolbar("LogCatToolbar", actionGroup, false)
@@ -587,7 +541,5 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         add(toolbar.component, BorderLayout.WEST)
     }
 
-    override fun dispose() {
-        bufferTimer.stop()
-    }
+    override fun dispose() { bufferTimer.stop() }
 }

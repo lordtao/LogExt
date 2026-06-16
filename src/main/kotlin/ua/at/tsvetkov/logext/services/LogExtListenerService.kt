@@ -14,6 +14,7 @@ class LogExtListenerService(private val project: Project) : Disposable {
     private var logcatThread: Thread? = null
     private var isDisposed = false
     private val deviceChangeListeners = CopyOnWriteArrayList<() -> Unit>()
+    private val rawToFormattedDeviceNames = mutableMapOf<String, String>()
 
     init {
         setupAdbListener()
@@ -47,22 +48,42 @@ class LogExtListenerService(private val project: Project) : Disposable {
             val adbClass = Class.forName("com.android.ddmlib.AndroidDebugBridge")
             val bridge = adbClass.getMethod("getBridge").invoke(null)
             val devices = bridge?.javaClass?.getMethod("getDevices")?.invoke(bridge) as? Array<*>
+            
+            rawToFormattedDeviceNames.clear()
             devices?.mapNotNull { device ->
-                device?.javaClass?.getMethod("getName")?.invoke(device) as? String
+                val rawName = device?.javaClass?.getMethod("getName")?.invoke(device) as? String
+                rawName?.let {
+                    val formatted = formatDeviceName(it)
+                    rawToFormattedDeviceNames[formatted] = it
+                    formatted
+                }
             } ?: emptyList()
         } catch (_: Exception) {
             emptyList()
         }
     }
 
+    private fun formatDeviceName(rawName: String): String {
+        // Пример: xiaomi-m2102j20sg-38e253f0 -> Xiaomi M2102J20SG
+        val parts = rawName.split("-")
+        if (parts.size < 2) return rawName.replaceFirstChar { it.uppercase() }
+        
+        val manufacturer = parts[0].replaceFirstChar { it.uppercase() }
+        val model = parts[1].uppercase()
+        
+        return "$manufacturer $model"
+    }
+
     fun getProcessList(deviceName: String?): Map<String, String> {
         if (deviceName == null || deviceName == "Loading devices...") return emptyMap()
+        val rawName = rawToFormattedDeviceNames[deviceName] ?: deviceName
+        
         return try {
             val adbClass = Class.forName("com.android.ddmlib.AndroidDebugBridge")
             val bridge = adbClass.getMethod("getBridge").invoke(null) ?: return emptyMap()
             val devices = bridge.javaClass.getMethod("getDevices").invoke(bridge) as? Array<*> ?: return emptyMap()
             
-            val device = devices.firstOrNull { it?.javaClass?.getMethod("getName")?.invoke(it) == deviceName }
+            val device = devices.firstOrNull { it?.javaClass?.getMethod("getName")?.invoke(it) == rawName }
                 ?: return emptyMap()
 
             val clients = device.javaClass.getMethod("getClients").invoke(device) as? Array<*> ?: return emptyMap()
@@ -88,17 +109,18 @@ class LogExtListenerService(private val project: Project) : Disposable {
 
     fun startListening(deviceName: String?, callback: (String) -> Unit) {
         stopListening()
+        val rawName = rawToFormattedDeviceNames[deviceName] ?: deviceName
         
         try {
             val adbClass = Class.forName("com.android.ddmlib.AndroidDebugBridge")
             val bridge = adbClass.getMethod("getBridge").invoke(null) ?: return
             val devices = bridge.javaClass.getMethod("getDevices").invoke(bridge) as? Array<*> ?: return
 
-            val device = if (deviceName == null) {
+            val device = if (rawName == null) {
                 devices.firstOrNull()
             } else {
                 devices.firstOrNull { 
-                    it?.javaClass?.getMethod("getName")?.invoke(it) == deviceName 
+                    it?.javaClass?.getMethod("getName")?.invoke(it) == rawName
                 }
             }
 
