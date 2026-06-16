@@ -17,7 +17,6 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
-import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import ua.at.tsvetkov.logext.models.TagInfo
@@ -55,7 +54,11 @@ class TagFilterDialog(
     private var ignoredScrollPane: JBScrollPane? = null
     
     private var showOnlyInactive = false
-    private val showInactiveBtn = JToggleButton("Show Inactive")
+    private var showOnlyActive = false
+    
+    private val showInactiveBtn = JToggleButton("Show only Inactive")
+    private val showActiveBtn = JToggleButton("Show only Active")
+    private val showAllBtn = JToggleButton("Show All", true)
 
     private val addFromSearchButton = JButton("Add from search").apply {
         toolTipText = "Convert search terms into active tags"
@@ -76,6 +79,8 @@ class TagFilterDialog(
         toolTipText = "Presets History"
         addActionListener { showHistoryPopup() }
     }
+
+    private var searchToolbar: ActionToolbar? = null
 
     init {
         title = "Filter Tags"
@@ -106,12 +111,23 @@ class TagFilterDialog(
 
         val actionGroup = DefaultActionGroup()
         val toolbar = ActionManager.getInstance().createActionToolbar("TagFilterSearch", actionGroup, true)
+        searchToolbar = toolbar
         
-        actionGroup.add(object : AnAction("Clear Search", "Clear search query", AllIcons.Actions.Close) {
+        val clearAction = object : AnAction("Clear Search", "Clear search query", AllIcons.Actions.Close) {
             override fun actionPerformed(e: AnActionEvent) {
                 searchArea.text = ""
             }
-        })
+
+            override fun update(e: AnActionEvent) {
+                val hasText = searchArea.text.isNotEmpty()
+                e.presentation.isEnabled = hasText
+                e.presentation.icon = if (hasText) AllIcons.Actions.Cancel else AllIcons.Actions.Close
+            }
+
+            override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        }
+        
+        actionGroup.add(clearAction)
         
         actionGroup.add(object : ToggleAction("Match Case", "Match case", AllIcons.Actions.MatchCase) {
             override fun isSelected(e: AnActionEvent): Boolean = settings.state.lastTagMatchCase
@@ -168,6 +184,8 @@ class TagFilterDialog(
                 saveButton.isEnabled = currentHasText
                 addFromSearchButton.isEnabled = currentHasText
                 applyFilter()
+                
+                searchToolbar?.updateActionsAsync()
             }
         })
     }
@@ -257,36 +275,54 @@ class TagFilterDialog(
         val popupRef = arrayOf<com.intellij.openapi.ui.popup.JBPopup?>(null)
 
         history.forEach { path ->
-            val row = JPanel(HorizontalLayout(5))
-            row.border = JBUI.Borders.empty(2, 5)
+            val row = JPanel(BorderLayout(10, 0))
+            row.border = JBUI.Borders.empty(4, 8)
+            row.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             
             val file = File(path)
+            val infoPanel = JPanel()
+            infoPanel.layout = BoxLayout(infoPanel, BoxLayout.Y_AXIS)
+            infoPanel.isOpaque = false
+
             val nameLabel = JBLabel(file.name).apply {
-                toolTipText = path
-                cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+                font = font.deriveFont(Font.BOLD)
+            }
+            val pathLabel = JBLabel(path).apply {
+                font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
+                foreground = JBColor.GRAY
             }
             
-            val deleteBtn = JButton(AllIcons.Actions.GC).apply {
-                preferredSize = Dimension(24, 24)
+            infoPanel.add(nameLabel)
+            infoPanel.add(pathLabel)
+
+            val deleteBtn = JButton(AllIcons.Actions.Close).apply {
+                preferredSize = Dimension(20, 20)
                 isBorderPainted = false
                 isContentAreaFilled = false
                 toolTipText = "Remove from history"
             }
 
-            nameLabel.addMouseListener(object : java.awt.event.MouseAdapter() {
+            val mouseListener = object : java.awt.event.MouseAdapter() {
                 override fun mouseClicked(e: java.awt.event.MouseEvent) {
-                    loadPresetFile(path)
-                    popupRef[0]?.cancel()
+                    if (e.component != deleteBtn) {
+                        loadPresetFile(path)
+                        popupRef[0]?.cancel()
+                    }
                 }
                 override fun mouseEntered(e: java.awt.event.MouseEvent) {
                     row.background = UIUtil.getListSelectionBackground(true)
                     nameLabel.foreground = UIUtil.getListSelectionForeground(true)
+                    pathLabel.foreground = UIUtil.getListSelectionForeground(true)
                 }
                 override fun mouseExited(e: java.awt.event.MouseEvent) {
                     row.background = null
                     nameLabel.foreground = null
+                    pathLabel.foreground = JBColor.GRAY
                 }
-            })
+            }
+
+            row.addMouseListener(mouseListener)
+            infoPanel.addMouseListener(mouseListener)
 
             deleteBtn.addActionListener {
                 settings.removeFromHistory(path)
@@ -301,8 +337,8 @@ class TagFilterDialog(
                 }
             }
 
-            row.add(nameLabel, HorizontalLayout.LEFT)
-            row.add(deleteBtn, HorizontalLayout.RIGHT)
+            row.add(infoPanel, BorderLayout.CENTER)
+            row.add(deleteBtn, BorderLayout.EAST)
             listPanel.add(row)
         }
 
@@ -328,8 +364,14 @@ class TagFilterDialog(
                     if (matchCase) tagName.contains(term) else tagName.lowercase().contains(term.lowercase())
                 }
             }
-            val matchesInactiveFilter = if (showOnlyInactive) tagInfo?.isSelected == false else true
-            component.isVisible = matchesQuery && matchesInactiveFilter
+            
+            val matchesStatusFilter = when {
+                showOnlyInactive -> tagInfo?.isSelected == false
+                showOnlyActive -> tagInfo?.isSelected == true
+                else -> true
+            }
+            
+            component.isVisible = matchesQuery && matchesStatusFilter
         }
 
         for ((tagName, component) in ignoredComponents) {
@@ -400,7 +442,7 @@ class TagFilterDialog(
             if (!tag.isPresentInCurrentLog) cb.foreground = JBColor.RED
             cb.addActionListener { 
                 tag.isSelected = cb.isSelected 
-                updateShowInactiveButtonState()
+                updateFilterButtonsState()
             }
             checkBoxes.add(cb)
             row.add(cb, BorderLayout.CENTER)
@@ -430,7 +472,7 @@ class TagFilterDialog(
         val footer = JPanel()
         footer.layout = BoxLayout(footer, BoxLayout.Y_AXIS)
 
-        val mainButtons = JPanel(GridLayout(1, 2))
+        val topButtons = JPanel(GridLayout(1, 3))
         val selectAll = JButton("Activate All")
         selectAll.addActionListener {
             checkBoxes.forEach {
@@ -439,7 +481,7 @@ class TagFilterDialog(
                     workingTags.find { t -> t.name == it.text }?.isSelected = true
                 }
             }
-            updateShowInactiveButtonState()
+            updateFilterButtonsState()
         }
         val clearAll = JButton("Deactivate All")
         clearAll.addActionListener {
@@ -449,23 +491,8 @@ class TagFilterDialog(
                     workingTags.find { t -> t.name == it.text }?.isSelected = false
                 }
             }
-            updateShowInactiveButtonState()
+            updateFilterButtonsState()
         }
-        mainButtons.add(selectAll)
-        mainButtons.add(clearAll)
-        footer.add(mainButtons)
-
-        val bottomButtonsPanel = JPanel(BorderLayout())
-        showInactiveBtn.isSelected = showOnlyInactive
-        if (showOnlyInactive) showInactiveBtn.text = "Show All"
-        showInactiveBtn.addActionListener {
-            showOnlyInactive = showInactiveBtn.isSelected
-            showInactiveBtn.text = if (showOnlyInactive) "Show All" else "Show Inactive"
-            applyFilter()
-        }
-        updateShowInactiveButtonState()
-        bottomButtonsPanel.add(showInactiveBtn, BorderLayout.WEST)
-
         val ignoreAllBtn = JButton("Ignore All")
         ignoreAllBtn.addActionListener {
             groupTags.forEach {
@@ -474,8 +501,42 @@ class TagFilterDialog(
             }
             updatePanels()
         }
-        bottomButtonsPanel.add(ignoreAllBtn, BorderLayout.EAST)
-        footer.add(bottomButtonsPanel)
+        
+        topButtons.add(selectAll)
+        topButtons.add(clearAll)
+        topButtons.add(ignoreAllBtn)
+        footer.add(topButtons)
+
+        val filterButtonsPanel = JPanel(GridLayout(1, 3, 5, 0))
+        
+        showInactiveBtn.addActionListener {
+            showOnlyInactive = true
+            showOnlyActive = false
+            updateFilterButtonsUI()
+            applyFilter()
+        }
+        
+        showActiveBtn.addActionListener {
+            showOnlyInactive = false
+            showOnlyActive = true
+            updateFilterButtonsUI()
+            applyFilter()
+        }
+
+        showAllBtn.addActionListener {
+            showOnlyInactive = false
+            showOnlyActive = false
+            updateFilterButtonsUI()
+            applyFilter()
+        }
+
+        filterButtonsPanel.add(showInactiveBtn)
+        filterButtonsPanel.add(showActiveBtn)
+        filterButtonsPanel.add(showAllBtn)
+        
+        updateFilterButtonsUI()
+        footer.add(Box.createVerticalStrut(5))
+        footer.add(filterButtonsPanel)
 
         panel.add(footer, BorderLayout.SOUTH)
         return panel
@@ -531,13 +592,27 @@ class TagFilterDialog(
         return panel
     }
 
-    private fun updateShowInactiveButtonState() {
+    private fun updateFilterButtonsUI() {
+        showInactiveBtn.isSelected = showOnlyInactive
+        showActiveBtn.isSelected = showOnlyActive
+        showAllBtn.isSelected = !showOnlyInactive && !showOnlyActive
+    }
+
+    private fun updateFilterButtonsState() {
         val hasInactive = workingTags.any { !it.isSelected }
+        val hasActive = workingTags.any { it.isSelected }
+        
         showInactiveBtn.isEnabled = hasInactive
-        if (!hasInactive && showOnlyInactive) {
+        showActiveBtn.isEnabled = hasActive
+        
+        if (showOnlyInactive && !hasInactive) {
             showOnlyInactive = false
-            showInactiveBtn.isSelected = false
-            showInactiveBtn.text = "Show Inactive"
+            updateFilterButtonsUI()
+            applyFilter()
+        }
+        if (showOnlyActive && !hasActive) {
+            showOnlyActive = false
+            updateFilterButtonsUI()
             applyFilter()
         }
     }
@@ -548,4 +623,6 @@ class TagFilterDialog(
         state.lastTagSearch = searchArea.text
         super.doOKAction()
     }
+
+    fun getWorkingTags(): List<TagInfo> = workingTags
 }

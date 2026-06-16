@@ -2,6 +2,7 @@ package ua.at.tsvetkov.logext.services
 
 import com.intellij.openapi.components.*
 import com.intellij.openapi.project.Project
+import java.io.File
 
 /**
  * Сервис для сохранения настроек конкретного проекта (фильтры, история поиска).
@@ -27,15 +28,29 @@ class LogExtSettingsService : PersistentStateComponent<LogExtSettingsService.Sta
     }
 
     fun addToHistory(path: String) {
-        myState.presetHistory.remove(path)
-        myState.presetHistory.add(0, path)
+        val normalizedPath = normalizePath(path)
+        
+        myState.presetHistory.removeIf { 
+            normalizePath(it).equals(normalizedPath, ignoreCase = true) 
+        }
+        myState.presetHistory.add(0, normalizedPath)
+        
         if (myState.presetHistory.size > 10) {
             myState.presetHistory = myState.presetHistory.take(10).toMutableList()
         }
     }
 
     fun removeFromHistory(path: String) {
-        myState.presetHistory.remove(path)
+        val normalizedPath = normalizePath(path)
+        myState.presetHistory.removeIf { 
+            normalizePath(it).equals(normalizedPath, ignoreCase = true) 
+        }
+    }
+
+    private fun normalizePath(path: String): String {
+        val file = File(path)
+        val absolute = try { file.canonicalPath } catch (_: Exception) { file.absolutePath }
+        return absolute.replace('\\', '/')
     }
 
     fun isTagSelected(tag: String): Boolean {

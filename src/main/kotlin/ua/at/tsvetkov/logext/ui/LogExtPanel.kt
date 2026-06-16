@@ -349,8 +349,23 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
     private fun showTagFilterDialog() {
         val tagsToShow = getFilteredTagsForCurrentProcess()
-        if (TagFilterDialog(project, tagsToShow).showAndGet()) {
-            settings.setSelectedTags(tagsToShow.asSequence().filter { it.isSelected }.map { it.name }.toSet())
+        val dialog = TagFilterDialog(project, tagsToShow)
+        if (dialog.showAndGet()) {
+            val updatedTags = dialog.getWorkingTags()
+            
+            // Интегрируем изменения обратно в основной список всех тегов
+            updatedTags.forEach { updated ->
+                val existing = allTags[updated.name]
+                if (existing == null) {
+                    // Это новый тег, добавленный из поиска
+                    allTags[updated.name] = updated
+                } else {
+                    // Обновляем только состояние выбора
+                    existing.isSelected = updated.isSelected
+                }
+            }
+
+            settings.setSelectedTags(updatedTags.asSequence().filter { it.isSelected }.map { it.name }.toSet())
             updateTagFilterIndicator()
             reFilterHistory()
         }
