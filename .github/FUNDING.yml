@@ -1,0 +1,10 @@
+# GitHub Funding Configuration
+# Documentation: https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+custom: ['https://secure.wayforpay.com/donate/LogExt']
+
+# If you set up GitHub Sponsors or Patreon in the future,
+# you can simply uncomment the corresponding lines below:
+# github:
+# patreon:
+# ko_fi:
