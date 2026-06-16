@@ -15,6 +15,7 @@ class LogExtSettingsService : PersistentStateComponent<LogExtSettingsService.Sta
         var lastSelectedProcess: String? = null
         var lastTagSearch: String = ""
         var lastTagMatchCase: Boolean = false
+        var presetHistory: MutableList<String> = mutableListOf()
     }
 
     private var myState = State()
@@ -23,6 +24,18 @@ class LogExtSettingsService : PersistentStateComponent<LogExtSettingsService.Sta
 
     override fun loadState(state: State) {
         myState = state
+    }
+
+    fun addToHistory(path: String) {
+        myState.presetHistory.remove(path)
+        myState.presetHistory.add(0, path)
+        if (myState.presetHistory.size > 10) {
+            myState.presetHistory = myState.presetHistory.take(10).toMutableList()
+        }
+    }
+
+    fun removeFromHistory(path: String) {
+        myState.presetHistory.remove(path)
     }
 
     fun isTagSelected(tag: String): Boolean {

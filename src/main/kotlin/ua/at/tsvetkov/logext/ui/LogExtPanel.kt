@@ -17,7 +17,6 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VfsUtilCore
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.content.ContentFactory
 import ua.at.tsvetkov.logext.models.TagInfo
@@ -199,9 +198,11 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private fun addCustomContextActions(group: DefaultActionGroup) {
         val editor = (consoleView as? ConsoleViewImpl)?.editor ?: return
         val selectedText = editor.selectionModel.selectedText
+        val lineIndex = editor.caretModel.logicalPosition.line
         val currentLineText = getLineAtCaret(editor) ?: return
-        val parsed = parser.parse(currentLineText)
-        val tagName = parsed?.tag
+        
+        // Пытаемся найти тег в текущей строке или в строках выше (если метаданные скрыты)
+        val tagName = findTagContextually(editor, lineIndex)
 
         if (selectedText != null) {
             group.add(object : AnAction("Copy Selection", null, AllIcons.Actions.Copy) {
@@ -211,12 +212,12 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
 
         group.add(object : AnAction("Copy Message", null, AllIcons.Actions.Copy) {
             override fun actionPerformed(e: AnActionEvent) {
-                val msg = parsed?.message ?: currentLineText
+                val msg = extractMessageOnly(currentLineText)
                 CopyPasteManager.getInstance().setContents(StringSelection(msg.trim()))
             }
         })
 
-        val searchText = selectedText ?: parsed?.message ?: currentLineText
+        val searchText = selectedText ?: extractMessageOnly(currentLineText)
         group.add(object : AnAction("Search with Google", null, AllIcons.Actions.Search) {
             override fun actionPerformed(e: AnActionEvent) {
                 val url = "https://www.google.com/search?q=" + URLEncoder.encode(searchText.trim(), "UTF-8")
@@ -259,6 +260,44 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         group.add(object : AnAction("Clear Log", null, AllIcons.Actions.GC) {
             override fun actionPerformed(e: AnActionEvent) { clearAllLogs() }
         })
+    }
+
+    private fun findTagContextually(editor: Editor, lineIndex: Int): String? {
+        val document = editor.document
+        var currentIndex = lineIndex
+        
+        while (currentIndex >= 0) {
+            val start = document.getLineStartOffset(currentIndex)
+            val end = document.getLineEndOffset(currentIndex)
+            val text = document.getText(com.intellij.openapi.util.TextRange(start, end))
+            
+            val tag = extractTagFromFormattedLine(text)
+            if (tag != null) return tag
+            
+            // Если строка не начинается с пробела (т.е. это не продолжение сообщения и не скрытые метаданные), 
+            // но тег не найден — значит мы вышли за пределы текущего блока лога.
+            if (text.isNotEmpty() && !text.startsWith(" ")) break
+            currentIndex--
+        }
+        return null
+    }
+
+    private fun extractTagFromFormattedLine(line: String): String? {
+        // Формат: ... [PID] [TID] Level Tag Message
+        // Уровень (V, D, I, W, E, A) всегда окружен пробелами в нашем форматировании
+        val levelMatch = Regex("""\s([VDIWEA])\s""").find(line) ?: return null
+        val afterLevel = line.substring(levelMatch.range.last + 1).trim()
+        
+        // Тег — это первое слово после уровня. 
+        // split(' ') корректно обработает даже если у тега есть отступы (tagWidth)
+        return afterLevel.split(' ').firstOrNull()
+    }
+
+    private fun extractMessageOnly(line: String): String {
+        val levelMatch = Regex("""\s([VDIWEA])\s""").find(line) ?: return line
+        val afterLevel = line.substring(levelMatch.range.last + 1).trim()
+        val firstSpace = afterLevel.indexOf(' ')
+        return if (firstSpace != -1) afterLevel.substring(firstSpace).trim() else afterLevel
     }
 
     private fun tryOpenInInternalAi(query: String): Boolean {
@@ -371,7 +410,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val selectedProcess = header.getSelectedProcess()
         var isAppLine = false
         if (selectedProcess != null && (selectedProcess != "All Processes")) {
-            if (parsed?.pid != null && processManager.getPackageByPidChecked(parsed.pid, selectedProcess)) isAppLine = true
+            if (parsed?.pid != null && processManager.getPackageByPidChecked(parsed.pid, expectedPackage = selectedProcess)) isAppLine = true
             if (processInfo == null && !isAppLine) return
         }
 
@@ -465,29 +504,20 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         
         actionGroup.add(object : AnAction("Import Log", "Import LogCat from file", AllIcons.ToolbarDecorator.Import) {
             override fun actionPerformed(e: AnActionEvent) {
-                // ЖЕСТКИЙ ФИЛЬТР ЧЕРЕЗ ПЕРЕОПРЕДЕЛЕНИЕ МЕТОДОВ
-                val descriptor = object : FileChooserDescriptor(true, false, false, false, false, false) {
-                    override fun isFileVisible(file: VirtualFile?, showHiddenFiles: Boolean): Boolean {
-                        if (file != null && file.isDirectory) return true
-                        return file?.name?.lowercase()?.endsWith(".logcat") == true
-                    }
-                    override fun isFileSelectable(file: VirtualFile?): Boolean {
-                        return file?.name?.lowercase()?.endsWith(".logcat") == true
-                    }
-                }.apply {
+                val descriptor = FileChooserDescriptor(true, false, false, false, false, false).apply {
                     title = "Import LogExt File"
                     description = "Choose a .logcat file to analyze"
+                    withExtensionFilter("Logcat files", "logcat")
                 }
-
+                
                 val virtualFile = FileChooser.chooseFile(descriptor, project, null)
                 virtualFile?.let {
                     val logFile = VfsUtilCore.virtualToIoFile(it)
-                    val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("TAO LogExt") ?: return
+                    val toolWindowManager = ToolWindowManager.getInstance(project)
+                    val toolWindow = toolWindowManager.getToolWindow("TAO LogExt") ?: return
                     val importedPanel = LogImportedPanel(project, logFile)
                     
                     val content = ContentFactory.getInstance().createContent(importedPanel, logFile.name, false)
-                    
-                    // ЯВНО РАЗРЕШАЕМ ЗАКРЫТИЕ
                     content.isCloseable = true
 
                     toolWindow.contentManager.addContent(content)

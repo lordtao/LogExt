@@ -9,6 +9,7 @@ import com.intellij.openapi.fileChooser.FileSaverDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.JBColor
@@ -16,6 +17,7 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
+import com.intellij.ui.components.panels.HorizontalLayout
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import ua.at.tsvetkov.logext.models.TagInfo
@@ -53,6 +55,7 @@ class TagFilterDialog(
     private var ignoredScrollPane: JBScrollPane? = null
     
     private var showOnlyInactive = false
+    private val showInactiveBtn = JToggleButton("Show Inactive")
 
     private val saveButton = JButton("Save Preset").apply {
         isEnabled = false
@@ -61,6 +64,11 @@ class TagFilterDialog(
 
     private val loadButton = JButton("Load Preset").apply {
         addActionListener { loadSearch() }
+    }
+
+    private val historyButton = JButton(AllIcons.Vcs.History).apply {
+        toolTipText = "Presets History"
+        addActionListener { showHistoryPopup() }
     }
 
     init {
@@ -126,6 +134,8 @@ class TagFilterDialog(
         buttonsPanel.add(saveButton)
         buttonsPanel.add(Box.createHorizontalStrut(10))
         buttonsPanel.add(loadButton)
+        buttonsPanel.add(Box.createHorizontalStrut(5))
+        buttonsPanel.add(historyButton)
         centerContainer.add(buttonsPanel)
 
         mainPanel.add(centerContainer, BorderLayout.CENTER)
@@ -140,6 +150,7 @@ class TagFilterDialog(
 
     private fun setupSearch() {
         saveButton.isEnabled = searchArea.text.isNotEmpty()
+        historyButton.isEnabled = settings.state.presetHistory.isNotEmpty()
         searchArea.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: DocumentEvent) {
                 saveButton.isEnabled = searchArea.text.isNotEmpty()
@@ -161,6 +172,8 @@ class TagFilterDialog(
             globalSettings.state.lastTagsPath = file.parent
             try {
                 file.writeText(searchArea.text)
+                settings.addToHistory(file.path)
+                historyButton.isEnabled = true
             } catch (e: Exception) {
                 Messages.showErrorDialog(project, "Error saving file: ${e.message}", "Error")
             }
@@ -177,13 +190,95 @@ class TagFilterDialog(
         val file = FileChooser.chooseFile(descriptor, project, toSelect)
         if (file != null) {
             globalSettings.state.lastTagsPath = file.parent.path
-            try {
-                val content = File(file.path).readText()
-                searchArea.text = content
-            } catch (e: Exception) {
-                Messages.showErrorDialog(project, "Error loading file: ${e.message}", "Error")
-            }
+            loadPresetFile(file.path)
         }
+    }
+
+    private fun loadPresetFile(path: String) {
+        try {
+            val file = File(path)
+            if (file.exists()) {
+                val content = file.readText()
+                searchArea.text = content
+                settings.addToHistory(path)
+                historyButton.isEnabled = true
+            } else {
+                settings.removeFromHistory(path)
+                historyButton.isEnabled = settings.state.presetHistory.isNotEmpty()
+                Messages.showErrorDialog(project, "File not found: $path", "Error")
+            }
+        } catch (e: Exception) {
+            Messages.showErrorDialog(project, "Error loading file: ${e.message}", "Error")
+        }
+    }
+
+    private fun showHistoryPopup() {
+        val history = settings.state.presetHistory
+        if (history.isEmpty()) return
+
+        val listPanel = JPanel()
+        listPanel.layout = BoxLayout(listPanel, BoxLayout.Y_AXIS)
+
+        val popupRef = arrayOf<com.intellij.openapi.ui.popup.JBPopup?>(null)
+
+        history.forEach { path ->
+            val row = JPanel(HorizontalLayout(5))
+            row.border = JBUI.Borders.empty(2, 5)
+            
+            val file = File(path)
+            val nameLabel = JBLabel(file.name).apply {
+                toolTipText = path
+                cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            }
+            
+            val deleteBtn = JButton(AllIcons.Actions.GC).apply {
+                preferredSize = Dimension(24, 24)
+                isBorderPainted = false
+                isContentAreaFilled = false
+                toolTipText = "Remove from history"
+            }
+
+            nameLabel.addMouseListener(object : java.awt.event.MouseAdapter() {
+                override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                    loadPresetFile(path)
+                    popupRef[0]?.cancel()
+                }
+                override fun mouseEntered(e: java.awt.event.MouseEvent) {
+                    row.background = UIUtil.getListSelectionBackground(true)
+                    nameLabel.foreground = UIUtil.getListSelectionForeground(true)
+                }
+                override fun mouseExited(e: java.awt.event.MouseEvent) {
+                    row.background = null
+                    nameLabel.foreground = null
+                }
+            })
+
+            deleteBtn.addActionListener {
+                settings.removeFromHistory(path)
+                historyButton.isEnabled = settings.state.presetHistory.isNotEmpty()
+                if (settings.state.presetHistory.isEmpty()) {
+                    popupRef[0]?.cancel()
+                } else {
+                    listPanel.remove(row)
+                    listPanel.revalidate()
+                    listPanel.repaint()
+                    popupRef[0]?.pack(true, true)
+                }
+            }
+
+            row.add(nameLabel, HorizontalLayout.LEFT)
+            row.add(deleteBtn, HorizontalLayout.RIGHT)
+            listPanel.add(row)
+        }
+
+        val popup = JBPopupFactory.getInstance().createComponentPopupBuilder(listPanel, null)
+            .setTitle("Preset History")
+            .setFocusable(true)
+            .setRequestFocus(true)
+            .createPopup()
+        
+        popupRef[0] = popup
+        popup.showInCenterOf(historyButton)
     }
 
     private fun applyFilter() {
@@ -268,7 +363,10 @@ class TagFilterDialog(
             }
 
             if (!tag.isPresentInCurrentLog) cb.foreground = JBColor.RED
-            cb.addActionListener { tag.isSelected = cb.isSelected }
+            cb.addActionListener { 
+                tag.isSelected = cb.isSelected 
+                updateShowInactiveButtonState()
+            }
             checkBoxes.add(cb)
             row.add(cb, BorderLayout.CENTER)
 
@@ -306,6 +404,7 @@ class TagFilterDialog(
                     workingTags.find { t -> t.name == it.text }?.isSelected = true
                 }
             }
+            updateShowInactiveButtonState()
         }
         val clearAll = JButton("Deactivate All")
         clearAll.addActionListener {
@@ -315,13 +414,13 @@ class TagFilterDialog(
                     workingTags.find { t -> t.name == it.text }?.isSelected = false
                 }
             }
+            updateShowInactiveButtonState()
         }
         mainButtons.add(selectAll)
         mainButtons.add(clearAll)
         footer.add(mainButtons)
 
         val bottomButtonsPanel = JPanel(BorderLayout())
-        val showInactiveBtn = JToggleButton("Show Inactive")
         showInactiveBtn.isSelected = showOnlyInactive
         if (showOnlyInactive) showInactiveBtn.text = "Show All"
         showInactiveBtn.addActionListener {
@@ -329,6 +428,7 @@ class TagFilterDialog(
             showInactiveBtn.text = if (showOnlyInactive) "Show All" else "Show Inactive"
             applyFilter()
         }
+        updateShowInactiveButtonState()
         bottomButtonsPanel.add(showInactiveBtn, BorderLayout.WEST)
 
         val ignoreAllBtn = JButton("Ignore All")
@@ -394,6 +494,17 @@ class TagFilterDialog(
         panel.add(returnAllBtn, BorderLayout.SOUTH)
 
         return panel
+    }
+
+    private fun updateShowInactiveButtonState() {
+        val hasInactive = workingTags.any { !it.isSelected }
+        showInactiveBtn.isEnabled = hasInactive
+        if (!hasInactive && showOnlyInactive) {
+            showOnlyInactive = false
+            showInactiveBtn.isSelected = false
+            showInactiveBtn.text = "Show Inactive"
+            applyFilter()
+        }
     }
 
     override fun doOKAction() {
