@@ -57,6 +57,12 @@ class TagFilterDialog(
     private var showOnlyInactive = false
     private val showInactiveBtn = JToggleButton("Show Inactive")
 
+    private val addFromSearchButton = JButton("Add from search").apply {
+        toolTipText = "Convert search terms into active tags"
+        isEnabled = false
+        addActionListener { addTagsFromSearch() }
+    }
+
     private val saveButton = JButton("Save Preset").apply {
         isEnabled = false
         addActionListener { saveSearch() }
@@ -131,6 +137,8 @@ class TagFilterDialog(
         centerContainer.add(hintLabel)
 
         val buttonsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 5))
+        buttonsPanel.add(addFromSearchButton)
+        buttonsPanel.add(Box.createHorizontalStrut(10))
         buttonsPanel.add(saveButton)
         buttonsPanel.add(Box.createHorizontalStrut(10))
         buttonsPanel.add(loadButton)
@@ -149,14 +157,41 @@ class TagFilterDialog(
     }
 
     private fun setupSearch() {
-        saveButton.isEnabled = searchArea.text.isNotEmpty()
+        val hasText = searchArea.text.isNotEmpty()
+        saveButton.isEnabled = hasText
+        addFromSearchButton.isEnabled = hasText
         historyButton.isEnabled = settings.state.presetHistory.isNotEmpty()
+        
         searchArea.document.addDocumentListener(object : DocumentAdapter() {
             override fun textChanged(e: DocumentEvent) {
-                saveButton.isEnabled = searchArea.text.isNotEmpty()
+                val currentHasText = searchArea.text.isNotEmpty()
+                saveButton.isEnabled = currentHasText
+                addFromSearchButton.isEnabled = currentHasText
                 applyFilter()
             }
         })
+    }
+
+    private fun addTagsFromSearch() {
+        val query = searchArea.text
+        val searchTerms = query.split(Regex("[\\s\\n\\r]+")).filter { it.isNotEmpty() }
+        if (searchTerms.isEmpty()) return
+
+        var changed = false
+        searchTerms.forEach { term ->
+            val existing = workingTags.find { it.name == term }
+            if (existing == null) {
+                workingTags.add(TagInfo(term, isSelected = true, isApplicationTag = false))
+                changed = true
+            } else if (!existing.isSelected) {
+                existing.isSelected = true
+                changed = true
+            }
+        }
+
+        if (changed) {
+            updatePanels()
+        }
     }
 
     private fun saveSearch() {

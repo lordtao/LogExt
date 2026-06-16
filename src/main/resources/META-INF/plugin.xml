@@ -37,6 +37,7 @@
             <li>UI improvements.</li>
             <li>Log string context menu fix.</li>
             <li>As new tags appear, they are added to the list of tags as enabled.</li>
+            <li>Added. Filter initialization for components that have not yet appeared in the log.</li>
         </ul>
     ]]></change-notes>
 
