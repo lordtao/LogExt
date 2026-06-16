@@ -15,6 +15,7 @@ class LogExtGlobalSettingsService : PersistentStateComponent<LogExtGlobalSetting
 
     class State {
         var ignoredTags: MutableSet<String> = mutableSetOf()
+        var ignoredStrings: MutableSet<String> = mutableSetOf()
         var levelColors: MutableMap<String, LevelAttributes> = mutableMapOf()
         
         var showDate: Boolean = true
@@ -32,6 +33,8 @@ class LogExtGlobalSettingsService : PersistentStateComponent<LogExtGlobalSetting
         var lastTagsPath: String? = null
         var minimizeForAi: Boolean = false
         var showDuplicateTags: Boolean = false
+        var isSoftWrap: Boolean = false
+        var isAutoScroll: Boolean = true
         var aiPrompt: String = "Explain the following Android log entry and provide possible solutions. " +
                 "Answer in English language."
     }
@@ -90,6 +93,19 @@ class LogExtGlobalSettingsService : PersistentStateComponent<LogExtGlobalSetting
         } else {
             myState.ignoredTags.remove(tag)
         }
+    }
+
+    fun isStringIgnored(text: String): Boolean {
+        if (myState.ignoredStrings.isEmpty()) return false
+        return myState.ignoredStrings.any { text.contains(it, ignoreCase = true) }
+    }
+
+    fun addIgnoredString(text: String) {
+        myState.ignoredStrings.add(text)
+    }
+
+    fun removeIgnoredString(text: String) {
+        myState.ignoredStrings.remove(text)
     }
 
     companion object {

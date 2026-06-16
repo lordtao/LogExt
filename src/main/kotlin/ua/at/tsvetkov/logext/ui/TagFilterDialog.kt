@@ -28,7 +28,7 @@ import javax.swing.*
 import javax.swing.event.DocumentEvent
 
 /**
- * Диалоговое окно для фильтрации тегов.
+ * Диалоговое окно для фильтрации тегов и строк.
  */
 class TagFilterDialog(
     private val project: Project,
@@ -39,8 +39,9 @@ class TagFilterDialog(
     private val globalSettings = LogExtGlobalSettingsService.getInstance()
     private val workingTags = allTags.toMutableList()
     private val ignoredTagsSet = globalSettings.state.ignoredTags.toMutableSet()
+    private val ignoredStringsSet = globalSettings.state.ignoredStrings.toMutableSet()
 
-    private val centerPanel = JPanel(GridLayout(1, 2, 10, 0))
+    private val centerPanel = JPanel(GridLayout(1, 3, 10, 0))
     private val searchArea = JBTextArea(2, 50).apply {
         lineWrap = true
         wrapStyleWord = true
@@ -49,9 +50,11 @@ class TagFilterDialog(
 
     private val tagComponents = mutableMapOf<String, JComponent>()
     private val ignoredComponents = mutableMapOf<String, JComponent>()
+    private val ignoredStringComponents = mutableMapOf<String, JComponent>()
     
     private var tagsScrollPane: JBScrollPane? = null
     private var ignoredScrollPane: JBScrollPane? = null
+    private var stringsScrollPane: JBScrollPane? = null
     
     private var showOnlyInactive = false
     private var showOnlyActive = false
@@ -83,7 +86,7 @@ class TagFilterDialog(
     private var searchToolbar: ActionToolbar? = null
 
     init {
-        title = "Filter Tags"
+        title = "Filter Tags and Strings"
 
         val state = settings.state
         searchArea.text = state.lastTagSearch
@@ -168,7 +171,7 @@ class TagFilterDialog(
     }
 
     override fun createCenterPanel(): JComponent {
-        centerPanel.preferredSize = Dimension(900, 600)
+        centerPanel.preferredSize = Dimension(1200, 600)
         return centerPanel
     }
 
@@ -383,6 +386,15 @@ class TagFilterDialog(
             component.isVisible = matchesQuery
         }
 
+        for ((str, component) in ignoredStringComponents) {
+            val matchesQuery = if (searchTerms.isEmpty()) true else {
+                searchTerms.any { term ->
+                    if (matchCase) str.contains(term) else str.lowercase().contains(term.lowercase())
+                }
+            }
+            component.isVisible = matchesQuery
+        }
+
         centerPanel.revalidate()
         centerPanel.repaint()
     }
@@ -390,25 +402,27 @@ class TagFilterDialog(
     private fun updatePanels() {
         val tagsScrollValue = tagsScrollPane?.verticalScrollBar?.value ?: 0
         val ignoredScrollValue = ignoredScrollPane?.verticalScrollBar?.value ?: 0
+        val stringsScrollValue = stringsScrollPane?.verticalScrollBar?.value ?: 0
 
         centerPanel.removeAll()
         tagComponents.clear()
         ignoredComponents.clear()
+        ignoredStringComponents.clear()
 
         val activeTags = workingTags.filter { !ignoredTagsSet.contains(it.name) }
             .sortedWith(compareByDescending<TagInfo> { it.isApplicationTag }.thenBy { it.name })
 
         val ignoredTagsNames = ignoredTagsSet.toList().sorted()
+        val ignoredStrings = ignoredStringsSet.toList().sorted()
 
-        val tagsPanel = createTagGroupPanel("Tags", activeTags, true)
-        val ignoredPanel = createIgnoredGroupPanel("Ignored Tags", ignoredTagsNames)
-        
-        centerPanel.add(tagsPanel)
-        centerPanel.add(ignoredPanel)
+        centerPanel.add(createTagGroupPanel("Tags", activeTags, true))
+        centerPanel.add(createIgnoredGroupPanel("Ignored Tags", ignoredTagsNames))
+        centerPanel.add(createIgnoredStringsPanel("Ignored Strings", ignoredStrings))
 
         SwingUtilities.invokeLater {
             tagsScrollPane?.verticalScrollBar?.value = tagsScrollValue
             ignoredScrollPane?.verticalScrollBar?.value = ignoredScrollValue
+            stringsScrollPane?.verticalScrollBar?.value = stringsScrollValue
         }
 
         applyFilter()
@@ -592,6 +606,57 @@ class TagFilterDialog(
         return panel
     }
 
+    private fun createIgnoredStringsPanel(title: String, strings: List<String>): JPanel {
+        val panel = JPanel(BorderLayout())
+        panel.add(JBLabel(title).apply {
+            font = font.deriveFont(Font.BOLD)
+            border = JBUI.Borders.emptyBottom(5)
+        }, BorderLayout.NORTH)
+
+        val listPanel = JPanel()
+        listPanel.layout = BoxLayout(listPanel, BoxLayout.Y_AXIS)
+
+        strings.forEach { str ->
+            val row = JPanel(BorderLayout())
+            row.maximumSize = Dimension(Int.MAX_VALUE, 32)
+            row.border = JBUI.Borders.empty(1, 0)
+
+            val label = JBLabel(str).apply {
+                toolTipText = str
+                border = JBUI.Borders.emptyLeft(5)
+            }
+            row.add(label, BorderLayout.CENTER)
+
+            val deleteBtn = JButton(AllIcons.Actions.Close).apply {
+                toolTipText = "Remove from Ignored Strings"
+                preferredSize = Dimension(28, 24)
+                margin = JBUI.emptyInsets()
+                isFocusable = false
+            }
+            deleteBtn.addActionListener {
+                ignoredStringsSet.remove(str)
+                updatePanels()
+            }
+            row.add(deleteBtn, BorderLayout.EAST)
+
+            ignoredStringComponents[str] = row
+            listPanel.add(row)
+        }
+
+        val scroll = JBScrollPane(listPanel)
+        stringsScrollPane = scroll
+        panel.add(scroll, BorderLayout.CENTER)
+
+        val clearAllBtn = JButton("Clear All Strings")
+        clearAllBtn.addActionListener {
+            ignoredStringsSet.clear()
+            updatePanels()
+        }
+        panel.add(clearAllBtn, BorderLayout.SOUTH)
+
+        return panel
+    }
+
     private fun updateFilterButtonsUI() {
         showInactiveBtn.isSelected = showOnlyInactive
         showActiveBtn.isSelected = showOnlyActive
@@ -619,6 +684,7 @@ class TagFilterDialog(
 
     override fun doOKAction() {
         globalSettings.state.ignoredTags = ignoredTagsSet
+        globalSettings.state.ignoredStrings = ignoredStringsSet
         val state = settings.state
         state.lastTagSearch = searchArea.text
         super.doOKAction()

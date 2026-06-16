@@ -17,6 +17,7 @@ import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.content.ContentFactory
 import ua.at.tsvetkov.logext.models.TagInfo
@@ -50,7 +51,13 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }.apply {
         val console = this as ConsoleViewImpl
         console.clearMessageFilters()
-        ApplicationManager.getApplication().invokeLater { setupContextMenu(console.editor) }
+        ApplicationManager.getApplication().invokeLater { 
+            val editor = console.editor
+            if (editor != null) {
+                setupContextMenu(editor)
+                editor.settings.isUseSoftWraps = LogExtGlobalSettingsService.getInstance().state.isSoftWrap
+            }
+        }
     }
 
     private val allTags = mutableMapOf<String, TagInfo>()
@@ -67,7 +74,6 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     private var filterHeader: LogFilterHeader? = null
     private var currentDevice: String? = null
     private var lastMetadata: String? = null
-    private var autoScrollToEnd = true
 
     private val logBuffer = ConcurrentLinkedQueue<LogItem>()
     private val bufferTimer: Timer
@@ -201,7 +207,6 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         val lineIndex = editor.caretModel.logicalPosition.line
         val currentLineText = getLineAtCaret(editor) ?: return
         
-        // Пытаемся найти тег в текущей строке или в строках выше (если метаданные скрыты)
         val tagName = findTagContextually(editor, lineIndex)
 
         if (selectedText != null) {
@@ -254,6 +259,19 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     reFilterHistory()
                 }
             })
+            
+            if (selectedText != null) {
+                val shortText = if (selectedText.length > 20) selectedText.take(20).trim() + "..." else selectedText.trim()
+                group.add(object : AnAction("Always Ignore String '$shortText'", null, AllIcons.Actions.DeleteTag) {
+                    override fun actionPerformed(e: AnActionEvent) {
+                        val cleanText = selectedText.take(50).trim()
+                        if (cleanText.isNotEmpty()) {
+                            globalSettings.addIgnoredString(cleanText)
+                            reFilterHistory()
+                        }
+                    }
+                })
+            }
         }
 
         group.addSeparator()
@@ -274,8 +292,6 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             val tag = extractTagFromFormattedLine(text)
             if (tag != null) return tag
             
-            // Если строка не начинается с пробела (т.е. это не продолжение сообщения и не скрытые метаданные), 
-            // но тег не найден — значит мы вышли за пределы текущего блока лога.
             if (text.isNotEmpty() && !text.startsWith(" ")) break
             currentIndex--
         }
@@ -283,13 +299,8 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
     }
 
     private fun extractTagFromFormattedLine(line: String): String? {
-        // Формат: ... [PID] [TID] Level Tag Message
-        // Уровень (V, D, I, W, E, A) всегда окружен пробелами в нашем форматировании
         val levelMatch = Regex("""\s([VDIWEA])\s""").find(line) ?: return null
         val afterLevel = line.substring(levelMatch.range.last + 1).trim()
-        
-        // Тег — это первое слово после уровня. 
-        // split(' ') корректно обработает даже если у тега есть отступы (tagWidth)
         return afterLevel.split(' ').firstOrNull()
     }
 
@@ -342,7 +353,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 item = logBuffer.poll()
             }
             
-            if (autoScrollToEnd) (consoleView as ConsoleViewImpl).scrollToEnd()
+            if (globalSettings.state.isAutoScroll) (consoleView as ConsoleViewImpl).scrollToEnd()
             else scrollingModel?.scrollVertically(oldOffset)
         }
     }
@@ -353,14 +364,11 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         if (dialog.showAndGet()) {
             val updatedTags = dialog.getWorkingTags()
             
-            // Интегрируем изменения обратно в основной список всех тегов
             updatedTags.forEach { updated ->
                 val existing = allTags[updated.name]
                 if (existing == null) {
-                    // Это новый тег, добавленный из поиска
                     allTags[updated.name] = updated
                 } else {
-                    // Обновляем только состояние выбора
                     existing.isSelected = updated.isSelected
                 }
             }
@@ -430,6 +438,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         }
 
         if (parsed?.tag != null && globalSettings.isTagIgnored(parsed.tag)) return
+        if (globalSettings.isStringIgnored(line)) return
 
         synchronized(rawLogsHistory) {
             rawLogsHistory.add(line)
@@ -460,7 +469,6 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         if (isAppTag) tagInfo.isApplicationTag = true
         
         if (isNewTag) {
-            // Если у нас уже есть набор выбранных тегов, добавляем туда новый как активный
             settings.state.selectedTags?.let {
                 val updatedTags = it.toMutableSet()
                 updatedTags.add(tagName)
@@ -489,7 +497,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
             historyCopy.forEach { message ->
                 val parsed = parser.parse(message)
                 if (parsed != null) {
-                    if (globalSettings.isTagIgnored(parsed.tag)) return@forEach
+                    if (globalSettings.isTagIgnored(parsed.tag) || globalSettings.isStringIgnored(message)) return@forEach
                     val selectedProcess = header.getSelectedProcess()
                     val targetPid = if (selectedProcess != null && (selectedProcess != "All Processes")) processManager.findPidByPackage(selectedProcess) else null
                     if (targetPid != null && (parsed.pid != targetPid)) return@forEach
@@ -543,7 +551,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                     
                     val content = ContentFactory.getInstance().createContent(importedPanel, logFile.name, false)
                     content.isCloseable = true
-
+                    
                     toolWindow.contentManager.addContent(content)
                     toolWindow.contentManager.setSelectedContent(content)
                     Disposer.register(content, importedPanel)
@@ -556,17 +564,20 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
         actionGroup.addSeparator()
 
         actionGroup.add(object : ToggleAction("Scroll to the End", null, AllIcons.RunConfigurations.Scroll_down) {
-            override fun isSelected(e: AnActionEvent): Boolean = autoScrollToEnd
+            override fun isSelected(e: AnActionEvent): Boolean = globalSettings.state.isAutoScroll
             override fun setSelected(e: AnActionEvent, state: Boolean) {
-                autoScrollToEnd = state
+                globalSettings.state.isAutoScroll = state
                 if (state) (consoleView as ConsoleViewImpl).scrollToEnd()
             }
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
         })
 
         actionGroup.add(object : ToggleAction("Soft-Wrap", null, AllIcons.Actions.ToggleSoftWrap) {
-            override fun isSelected(e: AnActionEvent): Boolean = (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps ?: false
-            override fun setSelected(e: AnActionEvent, state: Boolean) { (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps = state }
+            override fun isSelected(e: AnActionEvent): Boolean = globalSettings.state.isSoftWrap
+            override fun setSelected(e: AnActionEvent, state: Boolean) {
+                globalSettings.state.isSoftWrap = state
+                (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps = state
+            }
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
         })
 
