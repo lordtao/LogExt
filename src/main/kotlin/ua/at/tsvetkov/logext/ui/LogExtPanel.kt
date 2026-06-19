@@ -209,9 +209,7 @@ class LogExtPanel(private val project: Project) : JPanel(BorderLayout()), Dispos
                 addCustomContextActions(group)
                 group.addSeparator()
                 val standardGroup = ActionManager.getInstance().getAction(ActionPlaces.EDITOR_POPUP) as? ActionGroup
-                if (standardGroup != null) {
-                    group.addAll(standardGroup)
-                }
+                standardGroup?.let{group.add(standardGroup)}
                 val popupMenu = ActionManager.getInstance().createActionPopupMenu("LogExtPopup", group)
                 popupMenu.component.show(e.component, e.x, e.y)
             }

@@ -6,7 +6,14 @@ import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.*
+import com.intellij.openapi.actionSystem.ActionGroup
+import com.intellij.openapi.actionSystem.ActionManager
+import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.ActionUpdateThread
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.markup.TextAttributes
@@ -46,7 +53,7 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
     private val localSelectedTags = mutableSetOf<String>()
     private val globalSettings = LogExtGlobalSettingsService.getInstance()
     private val rawLogsHistory = mutableListOf<String>()
-    
+
     private var isAllSelected = true
     private var fileTagsCount = 0
 
@@ -60,10 +67,9 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
     init {
         val header = LogFilterHeader(
             onDeviceChanged = {},
-            onProcessChanged = {},
-            onLevelsChanged = { reFilterHistory() },
-            onTagFilterClicked = { showTagFilterDialog() }
-        ).apply {
+                                     onProcessChanged = {},
+                                     onLevelsChanged = { reFilterHistory() },
+                                     onTagFilterClicked = { showTagFilterDialog() }).apply {
             hideDeviceAndProcessSelectors()
         }
         filterHeader = header
@@ -79,16 +85,16 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
     private fun loadLogFile() {
         if (!logFile.exists()) return
         val lines = parser.parseJsonFile(logFile)
-        
+
         val uniqueTags = mutableSetOf<String>()
         lines.forEach { line ->
             parser.parse(line)?.let { uniqueTags.add(it.tag) }
         }
-        
+
         fileTagsCount = uniqueTags.size
         localSelectedTags.addAll(uniqueTags)
         isAllSelected = true
-        
+
         synchronized(rawLogsHistory) {
             rawLogsHistory.addAll(lines)
         }
@@ -97,17 +103,20 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
 
     private fun setupContextMenu(editor: Editor?) {
         editor?.contentComponent?.addMouseListener(object : java.awt.event.MouseAdapter() {
-            override fun mousePressed(e: java.awt.event.MouseEvent) { if (e.isPopupTrigger) showPopupMenu(e) }
-            override fun mouseReleased(e: java.awt.event.MouseEvent) { if (e.isPopupTrigger) showPopupMenu(e) }
+            override fun mousePressed(e: java.awt.event.MouseEvent) {
+                if (e.isPopupTrigger) showPopupMenu(e)
+            }
+
+            override fun mouseReleased(e: java.awt.event.MouseEvent) {
+                if (e.isPopupTrigger) showPopupMenu(e)
+            }
+
             private fun showPopupMenu(e: java.awt.event.MouseEvent) {
                 val group = DefaultActionGroup()
                 addCustomContextActions(group)
                 group.addSeparator()
                 val standardGroup = ActionManager.getInstance().getAction(ActionPlaces.EDITOR_POPUP) as? ActionGroup
-                if (standardGroup != null) {
-                    val children = standardGroup.getChildren(null)
-                    group.addAll(*children)
-                }
+                standardGroup?.let { group.add(it) }
                 val popupMenu = ActionManager.getInstance().createActionPopupMenu("ImportedLogPopup", group)
                 popupMenu.component.show(e.component, e.x, e.y)
             }
@@ -123,7 +132,9 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
 
         if (selectedText != null) {
             group.add(object : AnAction("Copy Selection", null, AllIcons.Actions.Copy) {
-                override fun actionPerformed(e: AnActionEvent) { CopyPasteManager.getInstance().setContents(StringSelection(selectedText)) }
+                override fun actionPerformed(e: AnActionEvent) {
+                    CopyPasteManager.getInstance().setContents(StringSelection(selectedText))
+                }
             })
         }
 
@@ -136,13 +147,19 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
 
         val searchText = selectedText ?: parsed?.message ?: currentLineText
         group.add(object : AnAction("Search with Google", null, AllIcons.Actions.Search) {
-            override fun actionPerformed(e: AnActionEvent) { BrowserUtil.browse("https://www.google.com/search?q=" + URLEncoder.encode(searchText.trim(), "UTF-8")) }
+            override fun actionPerformed(e: AnActionEvent) {
+                BrowserUtil.browse("https://www.google.com/search?q=" + URLEncoder.encode(searchText.trim(), "UTF-8"))
+            }
         })
 
         group.add(object : AnAction("Explain with AI", null, AllIcons.Actions.IntentionBulb) {
             override fun actionPerformed(e: AnActionEvent) {
                 val query = "${globalSettings.state.aiPrompt}\n\n${searchText.trim()}"
-                if (!tryOpenInInternalAi(query)) BrowserUtil.browse("https://www.google.com/search?q=" + URLEncoder.encode(query, "UTF-8"))
+                if (!tryOpenInInternalAi(query)) BrowserUtil.browse(
+                    "https://www.google.com/search?q=" + URLEncoder.encode(
+                        query, "UTF-8"
+                    )
+                )
             }
         })
 
@@ -165,17 +182,24 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
             val api = companion.javaClass.getMethod("getInstance").invoke(companion)
             val requestSourceClass = Class.forName("com.android.tools.idea.gemini.GeminiPluginApi\$RequestSource")
             val logcatSource = requestSourceClass.getField("LOGCAT").get(null)
-            val stageChatQueryMethod = api.javaClass.getMethod("stageChatQuery", Project::class.java, String::class.java, requestSourceClass)
+            val stageChatQueryMethod =
+                api.javaClass.getMethod("stageChatQuery", Project::class.java, String::class.java, requestSourceClass)
             stageChatQueryMethod.invoke(api, project, query, logcatSource)
             true
-        } catch (_: Exception) { false }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun getLineAtCaret(editor: Editor): String? {
         val document = editor.document
         val lineIndex = editor.caretModel.logicalPosition.line
         if (lineIndex < 0 || lineIndex >= document.lineCount) return null
-        return document.getText(com.intellij.openapi.util.TextRange(document.getLineStartOffset(lineIndex), document.getLineEndOffset(lineIndex)))
+        return document.getText(
+            com.intellij.openapi.util.TextRange(
+                document.getLineStartOffset(lineIndex), document.getLineEndOffset(lineIndex)
+            )
+        )
     }
 
     private fun showTagFilterDialog() {
@@ -200,7 +224,8 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
                     if (globalSettings.isTagIgnored(parsed.tag)) return@forEach
                     if (header.isLevelSelected(parsed.level)) {
                         if (localSelectedTags.contains(parsed.tag)) {
-                            val formattedLine = formatter.format(parsed, globalSettings.state, lastMetadata == parsed.metadata)
+                            val formattedLine =
+                                formatter.format(parsed, globalSettings.state, lastMetadata == parsed.metadata)
                             processParsedMessage(formattedLine, parsed.tag, parsed.level)
                             lastMetadata = parsed.metadata
                         }
@@ -228,7 +253,7 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
                 parser.parse(line)?.let { currentTagsInFile.add(it.tag) }
             }
         }
-        
+
         return currentTagsInFile.map { tagName ->
             TagInfo(tagName, isSelected = localSelectedTags.contains(tagName), isApplicationTag = false).apply {
                 isPresentInCurrentLog = true
@@ -238,20 +263,28 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
 
     private fun createToolbar() {
         val actionGroup = DefaultActionGroup()
-        
+
         val consoleActions = consoleView.createConsoleActions()
-        val scrollToEndAction = consoleActions.find { it.templatePresentation.icon == AllIcons.RunConfigurations.Scroll_down }
+        val scrollToEndAction =
+            consoleActions.find { it.templatePresentation.icon == AllIcons.RunConfigurations.Scroll_down }
         if (scrollToEndAction != null) actionGroup.add(scrollToEndAction)
 
         actionGroup.add(object : ToggleAction("Soft-Wrap", null, AllIcons.Actions.ToggleSoftWrap) {
-            override fun isSelected(e: AnActionEvent): Boolean = (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps ?: false
-            override fun setSelected(e: AnActionEvent, state: Boolean) { (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps = state }
+            override fun isSelected(e: AnActionEvent): Boolean =
+                (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps ?: false
+
+            override fun setSelected(e: AnActionEvent, state: Boolean) {
+                (consoleView as ConsoleViewImpl).editor?.settings?.isUseSoftWraps = state
+            }
+
             override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
         })
 
         actionGroup.addSeparator()
         actionGroup.add(object : AnAction("Copy Log", null, AllIcons.Actions.Copy) {
-            override fun actionPerformed(e: AnActionEvent) { CopyPasteManager.getInstance().setContents(StringSelection((consoleView as ConsoleViewImpl).text)) }
+            override fun actionPerformed(e: AnActionEvent) {
+                CopyPasteManager.getInstance().setContents(StringSelection((consoleView as ConsoleViewImpl).text))
+            }
         })
 
         actionGroup.add(object : AnAction("Save Log", null, AllIcons.Actions.MenuSaveall) {
@@ -259,14 +292,18 @@ class LogImportedPanel(private val project: Project, private val logFile: File) 
                 val dialog = LogExportDialog(project)
                 if (dialog.showAndGet()) {
                     val path = dialog.getExportPath()
-                    if (path.isNotEmpty()) exporter.export(File(path), (consoleView as ConsoleViewImpl).text, dialog.isMinimizeForAi())
+                    if (path.isNotEmpty()) exporter.export(
+                        File(path), (consoleView as ConsoleViewImpl).text, dialog.isMinimizeForAi()
+                    )
                 }
             }
         })
 
         actionGroup.addSeparator()
         actionGroup.add(object : AnAction("Settings", null, AllIcons.General.Settings) {
-            override fun actionPerformed(e: AnActionEvent) { if (LogSettingsDialog(project).showAndGet()) reFilterHistory() }
+            override fun actionPerformed(e: AnActionEvent) {
+                if (LogSettingsDialog(project).showAndGet()) reFilterHistory()
+            }
         })
 
         val toolbar = ActionManager.getInstance().createActionToolbar("ImportedLogToolbar", actionGroup, false)

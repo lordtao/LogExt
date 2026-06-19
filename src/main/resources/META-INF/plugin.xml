@@ -33,9 +33,7 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>Added String ignore filter.</li>
-            <li>Added ability to pause/resume logs.</li>
-            <li>Performance optimizations.</li>
+            <li>Compatibility fix</li>
         </ul>
     ]]></change-notes>
 
@@ -53,11 +51,11 @@
                     icon="/icons/toolWindowIcon.svg"
                     anchor="bottom"
                     canCloseContents="true"
-                    factoryClass="ua.at.tsvetkov.logext.ui.LogCatToolWindowFactory"/>
+                    factoryClass="ua.at.tsvetkov.logext.ui.LogExtToolWindowFactory"/>
     </extensions>
 
     <actions>
-        <action id="ua.at.tsvetkov.logext.actions.OpenLogCatAction"
+        <action id="ua.at.tsvetkov.logext.actions.OpenLogExtAction"
                 class="ua.at.tsvetkov.logext.actions.OpenLogExtAction"
                 text="TAO LogExt"
                 icon="/icons/toolWindowIcon.svg"
