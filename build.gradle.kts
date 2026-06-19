@@ -1,9 +1,11 @@
+import org.jetbrains.changelog.Changelog
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "2.3.0"
-    id("org.jetbrains.intellij.platform") version "2.7.1"
+    id("org.jetbrains.kotlin.jvm") version "2.4.0"
+    id("org.jetbrains.intellij.platform") version "2.16.0"
+    id("org.jetbrains.changelog") version "2.2.1"
 }
 
 group = "ua.at.tsvetkov"
@@ -23,7 +25,7 @@ repositories {
 dependencies {
     intellijPlatform {
         local(file(localIdePath))
-        
+
         testFramework(TestFrameworkType.Platform)
         bundledPlugin("com.intellij.java")
         bundledPlugin("org.jetbrains.android")
@@ -32,18 +34,25 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 }
 
+changelog {
+    version.set(project.version.toString())
+    path.set(file("CHANGELOG.md").canonicalPath)
+}
+
 intellijPlatform {
     pluginConfiguration {
         name = "TAO LogExt"
         ideaVersion {
-            // AI-251... соответствует 2025.1
             sinceBuild = "251"
             untilBuild = "271.*"
         }
 
-        changeNotes = """
-            Initial version
-        """.trimIndent()
+        changeNotes.set(provider {
+            changelog.renderItem(
+                changelog.getLatest(),
+                Changelog.OutputType.HTML
+            )
+        })
     }
 
     signing {
@@ -57,6 +66,15 @@ tasks {
     withType<JavaCompile> {
         sourceCompatibility = "21"
         targetCompatibility = "21"
+    }
+
+    patchPluginXml {
+        changeNotes.set(provider {
+            changelog.renderItem(
+                changelog.getLatest(),
+                Changelog.OutputType.HTML
+            )
+        })
     }
 
     runIde {
